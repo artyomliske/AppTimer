@@ -171,6 +171,9 @@ final class AppTimerStore {
         idleMonitor.onIdleThresholdReached = { [weak self] in
             self?.pauseForInactivity()
         }
+        if idlePauseEnabled || unassignedReminderEnabled || focusModeEnabled {
+            notificationManager.requestAuthorizationIfNeeded()
+        }
         if idlePauseEnabled {
             idleMonitor.start(threshold: TimeInterval(idlePauseMinutes * 60))
         }
