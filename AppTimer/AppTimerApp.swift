@@ -32,7 +32,7 @@ struct AppTimerApp: App {
     }()
 
     var body: some Scene {
-        MenuBarExtra("AppTimer", systemImage: store.isTracking ? "timer.circle.fill" : "timer.circle") {
+        MenuBarExtra("AppTimer", systemImage: store.focusPulseState.symbolName) {
             MenuBarRootView {
                 dashboardController.show(store: store, modelContainer: sharedModelContainer)
             }

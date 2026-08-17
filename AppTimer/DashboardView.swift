@@ -57,20 +57,8 @@ private struct TodayView: View {
                     MetricCard(title: "Проекты", value: "\(store.selectedProjectIDs.count)", detail: "выбрано сейчас")
                 }
 
-                GroupBox("Фокус сегодня") {
-                    let focus = store.todayFocusDurations
-                    if focus.observed == 0 {
-                        Text("Назначьте роли приложениям в «Настройках», чтобы видеть локальную сводку контекста активных интервалов.")
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        HStack(spacing: 14) {
-                            MetricCard(title: "Фокус", value: focus.work.appTimerText, detail: "рабочие приложения")
-                            MetricCard(title: "Отвлечения", value: focus.distracting.appTimerText, detail: "помеченные приложения")
-                            MetricCard(title: "Нейтральное", value: focus.neutral.appTimerText, detail: "остальной контекст")
-                        }
-                    }
-                }
+                CalmFocusOverview()
+                WeeklyFocusHeatmap()
 
                 GroupBox("Выбранные проекты") {
                     if store.selectedProjects.isEmpty {
@@ -100,6 +88,170 @@ private struct TodayView: View {
             .padding(28)
         }
         .navigationTitle("Сегодня")
+    }
+}
+
+private struct CalmFocusOverview: View {
+    @Environment(AppTimerStore.self) private var store
+
+    private var pulseColor: Color {
+        switch store.focusPulseState {
+        case .resting: .secondary
+        case .tracking: .blue
+        case .focused: .cyan
+        case .distracted: .orange
+        case .completed: .green
+        }
+    }
+
+    var body: some View {
+        let summary = store.todayFocusDurations
+        GroupBox {
+            HStack(spacing: 28) {
+                FocusRingChart(summary: summary, state: store.focusPulseState)
+                    .frame(width: 158, height: 158)
+
+                VStack(alignment: .leading, spacing: 11) {
+                    Label(store.focusPulseState.title, systemImage: store.focusPulseState.symbolName)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(pulseColor)
+
+                    if store.hasActiveFocusSession, let preset = store.activeFocusPreset {
+                        Text("До завершения блока: \(store.focusSessionRemaining.appTimerCompactText)")
+                            .font(.system(.title2, design: .monospaced).weight(.bold))
+                        ProgressView(value: store.focusSessionProgress)
+                            .tint(.cyan)
+                        HStack {
+                            Text("\(preset.title) без переключений")
+                                .font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Отменить") { store.cancelFocusSession() }
+                                .buttonStyle(.borderless)
+                        }
+                    } else {
+                        Text(summary.work.appTimerText)
+                            .font(.system(.title, design: .rounded).weight(.bold))
+                        Text(summary.observed == 0 ? "Назначьте роли приложениям, чтобы увидеть ритм дня." : "рабочего контекста за сегодня")
+                            .font(.caption).foregroundStyle(.secondary)
+                        HStack(spacing: 8) {
+                            ForEach(FocusSessionPreset.allCases) { preset in
+                                Button(preset.title) { store.startFocusSession(preset) }
+                                    .buttonStyle(.bordered)
+                                    .tint(.cyan)
+                                    .disabled(store.selectedProjectIDs.isEmpty)
+                            }
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(8)
+        } label: {
+            Label("Calm Focus", systemImage: "scope")
+        }
+    }
+}
+
+private struct FocusRingChart: View {
+    let summary: FocusDurationSummary
+    let state: FocusPulseState
+
+    private var total: TimeInterval { max(summary.observed, 1) }
+    private var workEnd: Double { summary.work / total }
+    private var distractionEnd: Double { min(1, workEnd + summary.distracting / total) }
+
+    var body: some View {
+        ZStack {
+            Circle().stroke(.quaternary, lineWidth: 15)
+            if summary.observed > 0 {
+                Circle()
+                    .trim(from: 0, to: max(0.015, workEnd))
+                    .stroke(.cyan, style: StrokeStyle(lineWidth: 15, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                if summary.distracting > 0 {
+                    Circle()
+                        .trim(from: min(0.99, workEnd + 0.015), to: max(workEnd + 0.02, distractionEnd))
+                        .stroke(.orange, style: StrokeStyle(lineWidth: 15, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                }
+                if summary.neutral > 0 {
+                    Circle()
+                        .trim(from: min(0.99, distractionEnd + 0.015), to: 1)
+                        .stroke(.secondary.opacity(0.65), style: StrokeStyle(lineWidth: 15, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                }
+            }
+            VStack(spacing: 4) {
+                Image(systemName: state.symbolName)
+                    .font(.title2)
+                    .foregroundStyle(state == .distracted ? .orange : .cyan)
+                Text(summary.observed.appTimerText)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Контекст дня: рабочее время \(summary.work.appTimerText), отвлечения \(summary.distracting.appTimerText)")
+    }
+}
+
+private struct WeeklyFocusHeatmap: View {
+    @Environment(AppTimerStore.self) private var store
+
+    private func fill(for day: FocusDaySummary) -> Color {
+        guard day.work > 0 else { return .secondary.opacity(0.12) }
+        let intensity = min(1, day.work / (3 * 60 * 60))
+        return .cyan.opacity(0.20 + 0.68 * intensity)
+    }
+
+    var body: some View {
+        let days = store.recentFocusDays
+        let totalWork = days.reduce(0) { $0 + $1.work }
+        let totalDistraction = days.reduce(0) { $0 + $1.distracting }
+
+        GroupBox {
+            HStack(spacing: 10) {
+                ForEach(days) { day in
+                    VStack(spacing: 6) {
+                        ZStack(alignment: .topTrailing) {
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(fill(for: day))
+                                .frame(height: 52)
+                                .overlay {
+                                    Text(day.work > 0 ? day.work.appTimerCompactText : "—")
+                                        .font(.caption2.monospacedDigit())
+                                        .foregroundStyle(day.work > 0 ? .primary : .secondary)
+                                }
+                            if day.distracting > 0 {
+                                Circle()
+                                    .fill(.orange)
+                                    .frame(width: 7, height: 7)
+                                    .padding(5)
+                            }
+                        }
+                        Text(day.date, format: .dateTime.weekday(.narrow))
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(day.date.formatted(date: .abbreviated, time: .omitted)): фокус \(day.work.appTimerText), отвлечения \(day.distracting.appTimerText)")
+                }
+            }
+            .padding(.vertical, 6)
+            HStack {
+                Text("За 7 дней: \(totalWork.appTimerText) фокуса")
+                Spacer()
+                if totalDistraction > 0 {
+                    Label(totalDistraction.appTimerText, systemImage: "circle.fill")
+                        .foregroundStyle(.orange)
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        } label: {
+            Label("Ритм недели", systemImage: "calendar.day.timeline.left")
+        }
     }
 }
 

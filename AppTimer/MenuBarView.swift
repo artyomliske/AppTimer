@@ -7,20 +7,32 @@ struct MenuBarView: View {
     @State private var newProjectName = ""
     let onShowDashboard: () -> Void
 
+    private var pulseColor: Color {
+        switch store.focusPulseState {
+        case .resting: .secondary
+        case .tracking: .blue
+        case .focused: .cyan
+        case .distracted: .orange
+        case .completed: .green
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(spacing: 12) {
+                FocusPulseIndicator(state: store.focusPulseState, progress: store.focusSessionProgress)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(store.isTracking ? "Идёт учёт" : "AppTimer")
+                    Text(store.focusPulseState.title)
                         .font(.headline)
-                    Text(store.statusMessage)
+                    Text(store.hasActiveFocusSession ? "До паузы: \(store.focusSessionRemaining.appTimerCompactText)" : store.statusMessage)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
                 Spacer()
-                Text(store.elapsedText)
+                Text(store.hasActiveFocusSession ? store.focusSessionRemaining.appTimerCompactText : store.elapsedText)
                     .font(.system(.title3, design: .monospaced).weight(.semibold))
-                    .foregroundStyle(store.isTracking ? .blue : .secondary)
+                    .foregroundStyle(pulseColor)
             }
 
             Divider()
@@ -70,6 +82,37 @@ struct MenuBarView: View {
                     .onSubmit(addProject)
                 Button(action: addProject) { Image(systemName: "plus") }
                     .disabled(newProjectName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+
+            Divider()
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Label("Фокус-блок", systemImage: "scope")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if let preset = store.activeFocusPreset {
+                        Text(preset.title).font(.caption.monospacedDigit()).foregroundStyle(pulseColor)
+                    }
+                }
+                if store.hasActiveFocusSession {
+                    HStack {
+                        Text("Один проект, без переключений")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Отменить") { store.cancelFocusSession() }
+                            .buttonStyle(.borderless)
+                    }
+                } else {
+                    HStack(spacing: 7) {
+                        ForEach(FocusSessionPreset.allCases) { preset in
+                            Button(preset.title) { store.startFocusSession(preset) }
+                                .buttonStyle(.bordered)
+                                .tint(.cyan)
+                                .disabled(store.selectedProjectIDs.isEmpty)
+                        }
+                    }
+                }
             }
 
             Divider()
@@ -125,5 +168,41 @@ struct MenuBarView: View {
     private func addProject() {
         store.createProject(named: newProjectName)
         newProjectName = ""
+    }
+}
+
+private struct FocusPulseIndicator: View {
+    let state: FocusPulseState
+    let progress: Double
+
+    private var color: Color {
+        switch state {
+        case .resting: .secondary
+        case .tracking: .blue
+        case .focused: .cyan
+        case .distracted: .orange
+        case .completed: .green
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            Circle().stroke(.quaternary, lineWidth: 4)
+            if state == .focused {
+                Circle()
+                    .trim(from: 0, to: max(0.02, progress))
+                    .stroke(color, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            } else {
+                Circle().fill(color.opacity(0.16))
+            }
+            Image(systemName: state.symbolName)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(color)
+        }
+        .frame(width: 34, height: 34)
+        .animation(.easeInOut(duration: 0.25), value: state.rawValue)
+        .animation(.linear(duration: 0.8), value: progress)
+        .accessibilityLabel("Focus Pulse: \(state.title)")
     }
 }

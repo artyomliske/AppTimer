@@ -16,6 +16,10 @@ final class AppTimerStore {
     var now = Date()
     var statusMessage = "Выберите проект, чтобы начать учёт"
     private(set) var focusSettingsRevision = 0
+    var activeFocusPreset: FocusSessionPreset?
+    var focusSessionStartedAt: Date?
+    var focusSessionEndsAt: Date?
+    var lastFocusSessionCompletedAt: Date?
 
     @ObservationIgnored private var modelContext: ModelContext?
     @ObservationIgnored private var workspaceMonitor = WorkspaceMonitor()
@@ -105,6 +109,27 @@ final class AppTimerStore {
 
     var isTracking: Bool { activeSession != nil }
 
+    var hasActiveFocusSession: Bool { activeFocusPreset != nil && focusSessionEndsAt != nil }
+
+    var focusSessionRemaining: TimeInterval {
+        guard let focusSessionEndsAt else { return 0 }
+        return max(0, focusSessionEndsAt.timeIntervalSince(now))
+    }
+
+    var focusSessionProgress: Double {
+        guard let preset = activeFocusPreset, let startedAt = focusSessionStartedAt else { return 0 }
+        let duration = TimeInterval(preset.minutes * 60)
+        return min(1, max(0, now.timeIntervalSince(startedAt) / duration))
+    }
+
+    var focusPulseState: FocusPulseState {
+        if distractingApplication != nil { return .distracted }
+        if hasActiveFocusSession { return .focused }
+        if let completedAt = lastFocusSessionCompletedAt,
+           now.timeIntervalSince(completedAt) < 20 { return .completed }
+        return isTracking ? .tracking : .resting
+    }
+
     var elapsedText: String {
         guard let activeSession else { return "00:00" }
         return activeSession.duration(until: now).appTimerCompactText
@@ -130,6 +155,22 @@ final class AppTimerStore {
             distractingBundleIdentifiers: distractingBundleIdentifiers,
             now: now
         )
+    }
+
+    var recentFocusDays: [FocusDaySummary] {
+        let calendar = Calendar.current
+        return (0..<7).compactMap { offset in
+            guard let date = calendar.date(byAdding: .day, value: offset - 6, to: now),
+                  let interval = calendar.dateInterval(of: .day, for: date) else { return nil }
+            let durations = ReportCalculator.focusDurations(
+                for: sessions,
+                interval: interval,
+                workBundleIdentifiers: workBundleIdentifiers,
+                distractingBundleIdentifiers: distractingBundleIdentifiers,
+                now: now
+            )
+            return FocusDaySummary(date: interval.start, work: durations.work, distracting: durations.distracting)
+        }
     }
 
     var focusApplications: [FocusApplication] {
@@ -183,6 +224,7 @@ final class AppTimerStore {
                 self?.now = .now
                 self?.checkUnassignedProjectReminder()
                 self?.checkDistractionReminder()
+                self?.updateFocusSession()
             }
         }
         refresh()
@@ -252,6 +294,30 @@ final class AppTimerStore {
 
     func startOrStopTracking() {
         isTracking ? stopTracking(reason: "Учёт остановлен") : startTracking()
+    }
+
+    func startFocusSession(_ preset: FocusSessionPreset) {
+        guard !selectedProjectIDs.isEmpty else {
+            statusMessage = "Выберите проект для фокус-сессии"
+            return
+        }
+        if !isTracking { startTracking() }
+        guard isTracking else { return }
+
+        activeFocusPreset = preset
+        focusSessionStartedAt = now
+        focusSessionEndsAt = now.addingTimeInterval(TimeInterval(preset.minutes * 60))
+        lastFocusSessionCompletedAt = nil
+        notificationManager.requestAuthorizationIfNeeded()
+        statusMessage = "Фокус: \(preset.title)"
+    }
+
+    func cancelFocusSession() {
+        guard hasActiveFocusSession else { return }
+        activeFocusPreset = nil
+        focusSessionStartedAt = nil
+        focusSessionEndsAt = nil
+        statusMessage = isTracking ? "Фокус-сессия отменена, учёт продолжается" : "Фокус-сессия отменена"
     }
 
     func startTracking() {
@@ -415,6 +481,7 @@ final class AppTimerStore {
         session.endedAt = end
         activeSession = nil
         resetDistractionState()
+        cancelFocusSession()
         saveAndRefresh()
     }
 
@@ -518,6 +585,23 @@ final class AppTimerStore {
             body: "Вы уже \(distractionAlertMinutes) мин в «\(application.name)». Активный проект: \(projectNames)."
         )
         lastDistractionReminderAt = currentTime
+    }
+
+    private func updateFocusSession() {
+        guard let preset = activeFocusPreset,
+              let endsAt = focusSessionEndsAt,
+              now >= endsAt else { return }
+
+        activeFocusPreset = nil
+        focusSessionStartedAt = nil
+        focusSessionEndsAt = nil
+        lastFocusSessionCompletedAt = now
+        statusMessage = "Фокус-блок \(preset.title) завершён"
+        notificationManager.post(
+            identifier: "apptimer.focus-session-complete",
+            title: "Фокус-блок завершён",
+            body: "Вы завершили блок на \(preset.title). Сделайте короткую паузу или продолжите учёт."
+        )
     }
 
     private func checkUnassignedProjectReminder() {

@@ -1,4 +1,4 @@
-// AppTimer domain model: local-first time tracking with explicit project allocation.
+// AppTimer domain model: local-first time tracking with explicit project allocation and focus sessions.
 import Foundation
 import SwiftData
 
@@ -46,6 +46,52 @@ enum FocusApplicationRole: String, CaseIterable, Codable, Identifiable {
         case .work: "Учитывается как контекст концентрации."
         case .neutral: "Сохраняется в отчёте, но не вызывает напоминаний."
         case .distracting: "Может вызвать напоминание во время активного учёта."
+        }
+    }
+}
+
+enum FocusSessionPreset: Int, CaseIterable, Identifiable {
+    case short = 25
+    case standard = 50
+    case deep = 90
+
+    var id: Int { rawValue }
+    var minutes: Int { rawValue }
+    var title: String { "\(rawValue) мин" }
+
+    var detail: String {
+        switch self {
+        case .short: "Короткий разгон для одной задачи."
+        case .standard: "Обычный блок глубокой работы."
+        case .deep: "Длинный блок без переключений."
+        }
+    }
+}
+
+enum FocusPulseState: String {
+    case resting
+    case tracking
+    case focused
+    case distracted
+    case completed
+
+    var title: String {
+        switch self {
+        case .resting: "Покой"
+        case .tracking: "Учёт идёт"
+        case .focused: "Фокус"
+        case .distracted: "Отвлечение"
+        case .completed: "Блок завершён"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .resting: "circle.dashed"
+        case .tracking: "timer"
+        case .focused: "scope"
+        case .distracted: "exclamationmark.circle.fill"
+        case .completed: "checkmark.circle.fill"
         }
     }
 }
@@ -169,6 +215,14 @@ struct FocusDurationSummary {
     let neutral: TimeInterval
 
     var observed: TimeInterval { work + distracting + neutral }
+}
+
+struct FocusDaySummary: Identifiable {
+    let date: Date
+    let work: TimeInterval
+    let distracting: TimeInterval
+
+    var id: Date { date }
 }
 
 extension TimeInterval {
