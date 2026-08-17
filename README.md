@@ -6,7 +6,7 @@
 
 ## Скачать
 
-Готовый образ для Apple Silicon доступен на странице релиза: **[AppTimer 1.0.0 — DMG для arm64](https://github.com/artyomliske/AppTimer/releases/download/v1.0.0/AppTimer-1.0.0-arm64.dmg)**.
+Готовый образ для Apple Silicon доступен по прямой ссылке: **[AppTimer 1.0.0 — DMG для arm64](https://github.com/artyomliske/AppTimer/raw/refs/heads/main/releases/AppTimer-1.0.0-arm64.dmg)**.
 
 1. Скачайте и откройте DMG.
 2. Перетащите `AppTimer.app` в папку `Applications`.
