@@ -26,6 +26,30 @@ enum AllocationMode: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum FocusApplicationRole: String, CaseIterable, Codable, Identifiable {
+    case work
+    case neutral
+    case distracting
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .work: "Рабочее"
+        case .neutral: "Нейтральное"
+        case .distracting: "Отвлекающее"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .work: "Учитывается как контекст концентрации."
+        case .neutral: "Сохраняется в отчёте, но не вызывает напоминаний."
+        case .distracting: "Может вызвать напоминание во время активного учёта."
+        }
+    }
+}
+
 @Model
 final class Project {
     @Attribute(.unique) var id: UUID
@@ -129,6 +153,22 @@ struct ApplicationDuration: Identifiable {
     let id: String
     let name: String
     let duration: TimeInterval
+}
+
+struct FocusApplication: Identifiable {
+    let bundleIdentifier: String
+    let name: String
+    let role: FocusApplicationRole
+
+    var id: String { bundleIdentifier }
+}
+
+struct FocusDurationSummary {
+    let work: TimeInterval
+    let distracting: TimeInterval
+    let neutral: TimeInterval
+
+    var observed: TimeInterval { work + distracting + neutral }
 }
 
 extension TimeInterval {

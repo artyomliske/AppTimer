@@ -15,6 +15,7 @@ final class AppTimerStore {
     var activeSession: WorkSession?
     var now = Date()
     var statusMessage = "Выберите проект, чтобы начать учёт"
+    private(set) var focusSettingsRevision = 0
 
     @ObservationIgnored private var modelContext: ModelContext?
     @ObservationIgnored private var workspaceMonitor = WorkspaceMonitor()
@@ -24,6 +25,9 @@ final class AppTimerStore {
     @ObservationIgnored private var activeSegment: AppSegment?
     @ObservationIgnored private var unassignedActivityStartedAt: Date?
     @ObservationIgnored private var lastUnassignedReminderAt: Date?
+    @ObservationIgnored private var distractingApplication: ActiveApplicationInfo?
+    @ObservationIgnored private var distractingApplicationStartedAt: Date?
+    @ObservationIgnored private var lastDistractionReminderAt: Date?
     @ObservationIgnored private var isConfigured = false
 
     var defaultAllocationMode: AllocationMode {
@@ -50,6 +54,31 @@ final class AppTimerStore {
 
     var unassignedReminderMinutes: Int {
         max(1, UserDefaults.standard.object(forKey: "unassignedReminderMinutes") as? Int ?? 15)
+    }
+
+    var focusModeEnabled: Bool {
+        _ = focusSettingsRevision
+        return UserDefaults.standard.object(forKey: "focusModeEnabled") as? Bool ?? false
+    }
+
+    var distractionAlertMinutes: Int {
+        _ = focusSettingsRevision
+        return max(1, UserDefaults.standard.object(forKey: "distractionAlertMinutes") as? Int ?? 5)
+    }
+
+    var distractionReminderCooldownMinutes: Int {
+        _ = focusSettingsRevision
+        return max(1, UserDefaults.standard.object(forKey: "distractionReminderCooldownMinutes") as? Int ?? 15)
+    }
+
+    var workBundleIdentifiers: Set<String> {
+        _ = focusSettingsRevision
+        return Set(UserDefaults.standard.stringArray(forKey: "focusWorkBundleIdentifiers") ?? [])
+    }
+
+    var distractingBundleIdentifiers: Set<String> {
+        _ = focusSettingsRevision
+        return Set(UserDefaults.standard.stringArray(forKey: "focusDistractingBundleIdentifiers") ?? [])
     }
 
     private var recentProjectIDs: [UUID] {
@@ -93,6 +122,36 @@ final class AppTimerStore {
         ReportCalculator.applicationDurations(for: sessions, interval: todayInterval, excludedBundleIdentifiers: excludedBundleIdentifiers, now: now)
     }
 
+    var todayFocusDurations: FocusDurationSummary {
+        ReportCalculator.focusDurations(
+            for: sessions,
+            interval: todayInterval,
+            workBundleIdentifiers: workBundleIdentifiers,
+            distractingBundleIdentifiers: distractingBundleIdentifiers,
+            now: now
+        )
+    }
+
+    var focusApplications: [FocusApplication] {
+        _ = focusSettingsRevision
+        var names = focusApplicationNames
+        sessions.forEach { session in
+            session.appSegments.forEach { segment in
+                if names[segment.bundleIdentifier] == nil { names[segment.bundleIdentifier] = segment.appName }
+            }
+        }
+        workBundleIdentifiers.union(distractingBundleIdentifiers).forEach { identifier in
+            if names[identifier] == nil { names[identifier] = identifier }
+        }
+        return names.map { identifier, name in
+            FocusApplication(bundleIdentifier: identifier, name: name, role: focusRole(for: identifier))
+        }
+        .sorted { lhs, rhs in
+            if lhs.role != rhs.role { return lhs.role.rawValue < rhs.role.rawValue }
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
+    }
+
     var todayActualDuration: TimeInterval {
         ReportCalculator.sessions(in: todayInterval, from: sessions, now: now)
             .reduce(0) { $0 + ReportCalculator.actualDuration(of: $1, clippedTo: todayInterval, now: now) }
@@ -120,6 +179,7 @@ final class AppTimerStore {
             Task { @MainActor [weak self] in
                 self?.now = .now
                 self?.checkUnassignedProjectReminder()
+                self?.checkDistractionReminder()
             }
         }
         refresh()
@@ -259,6 +319,52 @@ final class AppTimerStore {
         lastUnassignedReminderAt = nil
     }
 
+    func setFocusModeEnabled(_ enabled: Bool) {
+        UserDefaults.standard.set(enabled, forKey: "focusModeEnabled")
+        if enabled { notificationManager.requestAuthorizationIfNeeded() }
+        updateDistractionState(for: enabled ? workspaceMonitor.currentApplication : nil, at: .now)
+        focusSettingsRevision += 1
+    }
+
+    func setDistractionAlertMinutes(_ minutes: Int) {
+        UserDefaults.standard.set(max(1, minutes), forKey: "distractionAlertMinutes")
+        focusSettingsRevision += 1
+    }
+
+    func setDistractionReminderCooldownMinutes(_ minutes: Int) {
+        UserDefaults.standard.set(max(1, minutes), forKey: "distractionReminderCooldownMinutes")
+        focusSettingsRevision += 1
+    }
+
+    func focusRole(for bundleIdentifier: String) -> FocusApplicationRole {
+        if distractingBundleIdentifiers.contains(bundleIdentifier) { return .distracting }
+        if workBundleIdentifiers.contains(bundleIdentifier) { return .work }
+        return .neutral
+    }
+
+    func setFocusRole(_ role: FocusApplicationRole, for bundleIdentifier: String, name: String? = nil) {
+        let identifier = bundleIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !identifier.isEmpty else { return }
+        var work = workBundleIdentifiers
+        var distracting = distractingBundleIdentifiers
+        work.remove(identifier)
+        distracting.remove(identifier)
+        switch role {
+        case .work: work.insert(identifier)
+        case .distracting: distracting.insert(identifier)
+        case .neutral: break
+        }
+        UserDefaults.standard.set(Array(work).sorted(), forKey: "focusWorkBundleIdentifiers")
+        UserDefaults.standard.set(Array(distracting).sorted(), forKey: "focusDistractingBundleIdentifiers")
+        if let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            var names = focusApplicationNames
+            names[identifier] = name
+            focusApplicationNames = names
+        }
+        updateDistractionState(for: workspaceMonitor.currentApplication, at: .now)
+        focusSettingsRevision += 1
+    }
+
     func selectRecentProject(_ project: Project) {
         guard !project.isArchived else { return }
         let shouldRestart = isTracking
@@ -305,6 +411,7 @@ final class AppTimerStore {
         endActiveSegment(at: end)
         session.endedAt = end
         activeSession = nil
+        resetDistractionState()
         saveAndRefresh()
     }
 
@@ -312,6 +419,7 @@ final class AppTimerStore {
         guard let session = activeSession else { return }
         let end = Date()
         endActiveSegment(at: end)
+        updateDistractionState(for: application, at: end)
 
         guard let application,
               application.bundleIdentifier != Bundle.main.bundleIdentifier else { return }
@@ -352,6 +460,11 @@ final class AppTimerStore {
         recentProjectIDs = Array(ids.prefix(5))
     }
 
+    private var focusApplicationNames: [String: String] {
+        get { UserDefaults.standard.dictionary(forKey: "focusApplicationNames") as? [String: String] ?? [:] }
+        set { UserDefaults.standard.set(newValue, forKey: "focusApplicationNames") }
+    }
+
     private func pauseForInactivity() {
         guard idlePauseEnabled, isTracking else { return }
         stopTracking(reason: "Учёт приостановлен: нет активности \(idlePauseMinutes) мин")
@@ -360,6 +473,48 @@ final class AppTimerStore {
             title: "Учёт приостановлен",
             body: "AppTimer остановил учёт после \(idlePauseMinutes) мин бездействия."
         )
+    }
+
+    private func updateDistractionState(for application: ActiveApplicationInfo?, at date: Date) {
+        guard focusModeEnabled,
+              isTracking,
+              let application,
+              application.bundleIdentifier != Bundle.main.bundleIdentifier,
+              focusRole(for: application.bundleIdentifier) == .distracting else {
+            resetDistractionState()
+            return
+        }
+
+        if distractingApplication?.bundleIdentifier != application.bundleIdentifier {
+            distractingApplication = application
+            distractingApplicationStartedAt = date
+            lastDistractionReminderAt = nil
+        }
+    }
+
+    private func resetDistractionState() {
+        distractingApplication = nil
+        distractingApplicationStartedAt = nil
+        lastDistractionReminderAt = nil
+    }
+
+    private func checkDistractionReminder() {
+        guard focusModeEnabled,
+              isTracking,
+              let application = distractingApplication,
+              let startedAt = distractingApplicationStartedAt else { return }
+
+        let currentTime = Date()
+        guard currentTime.timeIntervalSince(startedAt) >= TimeInterval(distractionAlertMinutes * 60),
+              lastDistractionReminderAt == nil || currentTime.timeIntervalSince(lastDistractionReminderAt!) >= TimeInterval(distractionReminderCooldownMinutes * 60) else { return }
+
+        let projectNames = selectedProjects.map(\.name).joined(separator: ", ")
+        notificationManager.post(
+            identifier: "apptimer.distraction-reminder",
+            title: "Пора вернуться к задаче",
+            body: "Вы уже \(distractionAlertMinutes) мин в «\(application.name)». Активный проект: \(projectNames)."
+        )
+        lastDistractionReminderAt = currentTime
     }
 
     private func checkUnassignedProjectReminder() {

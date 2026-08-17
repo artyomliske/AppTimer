@@ -59,4 +59,33 @@ enum ReportCalculator {
             ApplicationDuration(id: identifier, name: value.0, duration: value.1)
         }.sorted { $0.duration > $1.duration }
     }
+
+    static func focusDurations(
+        for sessions: [WorkSession],
+        interval: DateInterval,
+        workBundleIdentifiers: Set<String>,
+        distractingBundleIdentifiers: Set<String>,
+        now: Date = .now
+    ) -> FocusDurationSummary {
+        var work: TimeInterval = 0
+        var distracting: TimeInterval = 0
+        var neutral: TimeInterval = 0
+
+        Self.sessions(in: interval, from: sessions, now: now).forEach { session in
+            session.appSegments.forEach { segment in
+                let start = max(segment.startedAt, interval.start)
+                let end = min(segment.endedAt ?? now, interval.end)
+                let duration = max(0, end.timeIntervalSince(start))
+                if distractingBundleIdentifiers.contains(segment.bundleIdentifier) {
+                    distracting += duration
+                } else if workBundleIdentifiers.contains(segment.bundleIdentifier) {
+                    work += duration
+                } else {
+                    neutral += duration
+                }
+            }
+        }
+
+        return FocusDurationSummary(work: work, distracting: distracting, neutral: neutral)
+    }
 }

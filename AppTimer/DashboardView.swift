@@ -57,6 +57,21 @@ private struct TodayView: View {
                     MetricCard(title: "Проекты", value: "\(store.selectedProjectIDs.count)", detail: "выбрано сейчас")
                 }
 
+                GroupBox("Фокус сегодня") {
+                    let focus = store.todayFocusDurations
+                    if focus.observed == 0 {
+                        Text("Назначьте роли приложениям в «Настройках», чтобы видеть локальную сводку контекста активных интервалов.")
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        HStack(spacing: 14) {
+                            MetricCard(title: "Фокус", value: focus.work.appTimerText, detail: "рабочие приложения")
+                            MetricCard(title: "Отвлечения", value: focus.distracting.appTimerText, detail: "помеченные приложения")
+                            MetricCard(title: "Нейтральное", value: focus.neutral.appTimerText, detail: "остальной контекст")
+                        }
+                    }
+                }
+
                 GroupBox("Выбранные проекты") {
                     if store.selectedProjects.isEmpty {
                         Text("Выберите проект в Menu Bar или на вкладке «Проекты».").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
@@ -248,6 +263,8 @@ private struct SettingsView: View {
     @Environment(AppTimerStore.self) private var store
     @State private var launchAtLogin = LaunchAtLoginManager()
     @State private var hotKey = TrackingHotKeyManager()
+    @State private var newFocusApplicationName = ""
+    @State private var newFocusBundleIdentifier = ""
 
     var body: some View {
         Form {
@@ -302,6 +319,61 @@ private struct SettingsView: View {
                     Text("Напоминание появляется только при активном использовании Mac, когда учёт остановлен и ни один проект не выбран.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+            }
+            Section("Focus Companion") {
+                Toggle("Напоминать при длительном отвлечении", isOn: Binding(
+                    get: { store.focusModeEnabled },
+                    set: { store.setFocusModeEnabled($0) }
+                ))
+                if store.focusModeEnabled {
+                    Stepper("Первое напоминание через \(store.distractionAlertMinutes) мин", value: Binding(
+                        get: { store.distractionAlertMinutes },
+                        set: { store.setDistractionAlertMinutes($0) }
+                    ), in: 1...60)
+                    Stepper("Повторять не чаще чем раз в \(store.distractionReminderCooldownMinutes) мин", value: Binding(
+                        get: { store.distractionReminderCooldownMinutes },
+                        set: { store.setDistractionReminderCooldownMinutes($0) }
+                    ), in: 1...120)
+                }
+                Text("Проверка действует только во время ручного учёта. AppTimer показывает уведомление, но не блокирует приложения и не читает их содержимое.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section("Роли приложений") {
+                if store.focusApplications.isEmpty {
+                    Text("Список пополнится приложениями из локального контекста учёта. Их также можно добавить вручную ниже.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(store.focusApplications) { application in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text(application.name).lineLimit(1)
+                                Spacer()
+                                Picker("Роль \(application.name)", selection: Binding(
+                                    get: { application.role },
+                                    set: { store.setFocusRole($0, for: application.bundleIdentifier, name: application.name) }
+                                )) {
+                                    ForEach(FocusApplicationRole.allCases) { role in
+                                        Text(role.title).tag(role)
+                                    }
+                                }
+                                .labelsHidden()
+                                .frame(width: 150)
+                            }
+                            Text(application.bundleIdentifier)
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                TextField("Название приложения", text: $newFocusApplicationName)
+                TextField("Bundle identifier, например com.apple.Safari", text: $newFocusBundleIdentifier)
+                Button("Добавить нейтральное приложение") {
+                    store.setFocusRole(.neutral, for: newFocusBundleIdentifier, name: newFocusApplicationName)
+                    newFocusApplicationName = ""
+                    newFocusBundleIdentifier = ""
+                }
+                .disabled(newFocusBundleIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Text("Рабочие приложения формируют сводку концентрации. Отвлекающие приложения могут прислать напоминание; все остальные считаются нейтральными.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Приватность") {
                 LabeledContent("Хранилище", value: "Только на этом Mac")
