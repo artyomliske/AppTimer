@@ -17,6 +17,9 @@
 		B10000000000000000000008 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000008 /* DashboardView.swift */; };
 		B10000000000000000000009 /* SwiftData.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F10000000000000000000012 /* SwiftData.framework */; };
 		B10000000000000000000010 /* DashboardPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000013 /* DashboardPanelController.swift */; };
+		B10000000000000000000011 /* LaunchAtLoginManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000014 /* LaunchAtLoginManager.swift */; };
+		B10000000000000000000012 /* TrackingHotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000015 /* TrackingHotKeyManager.swift */; };
+		B10000000000000000000013 /* CSVExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000016 /* CSVExporter.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +36,9 @@
 		F10000000000000000000011 /* AppTimer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AppTimer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F10000000000000000000012 /* SwiftData.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftData.framework; path = System/Library/Frameworks/SwiftData.framework; sourceTree = SDKROOT; };
 		F10000000000000000000013 /* DashboardPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardPanelController.swift; sourceTree = "<group>"; };
+		F10000000000000000000014 /* LaunchAtLoginManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginManager.swift; sourceTree = "<group>"; };
+		F10000000000000000000015 /* TrackingHotKeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingHotKeyManager.swift; sourceTree = "<group>"; };
+		F10000000000000000000016 /* CSVExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVExporter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -68,6 +74,9 @@
 				F10000000000000000000007 /* MenuBarView.swift */,
 				F10000000000000000000008 /* DashboardView.swift */,
 				F10000000000000000000013 /* DashboardPanelController.swift */,
+				F10000000000000000000014 /* LaunchAtLoginManager.swift */,
+				F10000000000000000000015 /* TrackingHotKeyManager.swift */,
+				F10000000000000000000016 /* CSVExporter.swift */,
 				F10000000000000000000009 /* Info.plist */,
 				F10000000000000000000010 /* AppTimer.entitlements */,
 			);
@@ -168,6 +177,9 @@
 				B10000000000000000000007 /* MenuBarView.swift in Sources */,
 				B10000000000000000000008 /* DashboardView.swift in Sources */,
 				B10000000000000000000010 /* DashboardPanelController.swift in Sources */,
+				B10000000000000000000011 /* LaunchAtLoginManager.swift in Sources */,
+				B10000000000000000000012 /* TrackingHotKeyManager.swift in Sources */,
+				B10000000000000000000013 /* CSVExporter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

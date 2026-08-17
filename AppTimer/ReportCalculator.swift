@@ -44,10 +44,11 @@ enum ReportCalculator {
         }.sorted { $0.allocated > $1.allocated }
     }
 
-    static func applicationDurations(for sessions: [WorkSession], interval: DateInterval, now: Date = .now) -> [ApplicationDuration] {
+    static func applicationDurations(for sessions: [WorkSession], interval: DateInterval, excludedBundleIdentifiers: Set<String> = [], now: Date = .now) -> [ApplicationDuration] {
         var summary: [String: (String, TimeInterval)] = [:]
         Self.sessions(in: interval, from: sessions, now: now).forEach { session in
             session.appSegments.forEach { segment in
+                guard !excludedBundleIdentifiers.contains(segment.bundleIdentifier) else { return }
                 let start = max(segment.startedAt, interval.start)
                 let end = min(segment.endedAt ?? now, interval.end)
                 let duration = max(0, end.timeIntervalSince(start))

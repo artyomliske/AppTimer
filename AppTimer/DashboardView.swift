@@ -164,6 +164,9 @@ private struct ReportsView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 270)
+                Button("Экспорт CSV") {
+                    CSVExporter.export(projects: rows, period: period.title)
+                }
             }
 
             GroupBox("Проекты") {
@@ -188,6 +191,41 @@ private struct ReportsView: View {
                     }
                 }
             }
+            GroupBox("Последние завершённые интервалы") {
+                let completed = store.sessions.filter { $0.endedAt != nil }.prefix(6)
+                if completed.isEmpty {
+                    Text("Завершённые интервалы появятся после остановки учёта.").foregroundStyle(.secondary)
+                } else {
+                    ForEach(Array(completed)) { session in
+                        HStack {
+                            Text(session.startedAt, format: .dateTime.day().month().hour().minute())
+                            Spacer()
+                            Text(session.duration().appTimerText).monospacedDigit()
+                            Button("Удалить", role: .destructive) { store.deleteCompletedSession(session) }
+                                .buttonStyle(.borderless)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+            if period == .week {
+                GroupBox("Неделя по дням") {
+                    let calendar = Calendar.current
+                    let weekStart = calendar.dateInterval(of: .weekOfYear, for: store.now)?.start ?? store.now
+                    ForEach(0..<7, id: \.self) { offset in
+                        let day = calendar.date(byAdding: .day, value: offset, to: weekStart) ?? weekStart
+                        let dayInterval = calendar.dateInterval(of: .day, for: day) ?? DateInterval(start: day, duration: 0)
+                        let duration = ReportCalculator.sessions(in: dayInterval, from: store.sessions, now: store.now)
+                            .reduce(0) { $0 + ReportCalculator.actualDuration(of: $1, clippedTo: dayInterval, now: store.now) }
+                        HStack {
+                            Text(day, format: .dateTime.weekday(.wide).day().month())
+                            Spacer()
+                            Text(duration.appTimerText).monospacedDigit()
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
             Text("Для режима «Полностью каждому» сумма по проектам может быть больше фактического времени.")
                 .font(.caption).foregroundStyle(.secondary)
             Spacer()
@@ -199,6 +237,8 @@ private struct ReportsView: View {
 
 private struct SettingsView: View {
     @Environment(AppTimerStore.self) private var store
+    @State private var launchAtLogin = LaunchAtLoginManager()
+    @State private var hotKey = TrackingHotKeyManager()
 
     var body: some View {
         Form {
@@ -212,6 +252,21 @@ private struct SettingsView: View {
                     }
                 }
                 Text(store.defaultAllocationMode.detail).font(.caption).foregroundStyle(.secondary)
+            }
+            Section("Быстрый доступ") {
+                Toggle("Запускать AppTimer при входе в macOS", isOn: Binding(
+                    get: { launchAtLogin.isEnabled },
+                    set: { launchAtLogin.setEnabled($0) }
+                ))
+                Toggle("Глобальная горячая клавиша \(hotKey.displayName)", isOn: Binding(
+                    get: { hotKey.isEnabled },
+                    set: { hotKey.setEnabled($0) }
+                ))
+                Text("Комбинация \(hotKey.displayName) запускает или останавливает учёт выбранных проектов из любого приложения.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if let error = launchAtLogin.errorMessage {
+                    Text(error).font(.caption).foregroundStyle(.red)
+                }
             }
             Section("Приватность") {
                 LabeledContent("Хранилище", value: "Только на этом Mac")

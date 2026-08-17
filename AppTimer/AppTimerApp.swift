@@ -4,8 +4,17 @@ import SwiftUI
 
 @main
 struct AppTimerApp: App {
-    @State private var store = AppTimerStore()
+    @State private var store: AppTimerStore
     @State private var dashboardController = DashboardPanelController()
+    @State private var hotKeyManager: TrackingHotKeyManager
+
+    init() {
+        let store = AppTimerStore()
+        let hotKeyManager = TrackingHotKeyManager()
+        hotKeyManager.onPress = { store.startOrStopTracking() }
+        _store = State(initialValue: store)
+        _hotKeyManager = State(initialValue: hotKeyManager)
+    }
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([

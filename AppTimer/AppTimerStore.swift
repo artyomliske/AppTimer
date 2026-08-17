@@ -27,6 +27,11 @@ final class AppTimerStore {
         set { UserDefaults.standard.set(newValue.rawValue, forKey: "defaultAllocationMode") }
     }
 
+    var excludedBundleIdentifiers: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: "excludedBundleIdentifiers") ?? []) }
+        set { UserDefaults.standard.set(Array(newValue).sorted(), forKey: "excludedBundleIdentifiers") }
+    }
+
     var selectedProjects: [Project] {
         projects.filter { selectedProjectIDs.contains($0.id) }
     }
@@ -47,7 +52,7 @@ final class AppTimerStore {
     }
 
     var todayApplicationDurations: [ApplicationDuration] {
-        ReportCalculator.applicationDurations(for: sessions, interval: todayInterval, now: now)
+        ReportCalculator.applicationDurations(for: sessions, interval: todayInterval, excludedBundleIdentifiers: excludedBundleIdentifiers, now: now)
     }
 
     var todayActualDuration: TimeInterval {
@@ -177,6 +182,26 @@ final class AppTimerStore {
 
     func setDefaultAllocationMode(_ mode: AllocationMode) {
         defaultAllocationMode = mode
+    }
+
+    func updateCompletedSession(_ session: WorkSession, startedAt: Date, endedAt: Date) {
+        guard session.endedAt != nil, endedAt > startedAt else { return }
+        session.startedAt = startedAt
+        session.endedAt = endedAt
+        saveAndRefresh()
+    }
+
+    func deleteCompletedSession(_ session: WorkSession) {
+        guard session.endedAt != nil else { return }
+        modelContext?.delete(session)
+        saveAndRefresh()
+    }
+
+    func toggleApplicationExclusion(_ bundleIdentifier: String) {
+        var excluded = excludedBundleIdentifiers
+        if excluded.contains(bundleIdentifier) { excluded.remove(bundleIdentifier) }
+        else { excluded.insert(bundleIdentifier) }
+        excludedBundleIdentifiers = excluded
     }
 
     private func closeActiveSession() {
