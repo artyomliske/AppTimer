@@ -125,7 +125,7 @@ final class WorkSession {
     var startedAt: Date
     var endedAt: Date?
     var allocationModeRaw: String
-    var note: String
+    var note: String?
     @Relationship(deleteRule: .cascade) var allocations: [SessionProjectAllocation]
     @Relationship(deleteRule: .cascade) var appSegments: [AppSegment]
 
@@ -134,7 +134,7 @@ final class WorkSession {
         self.startedAt = startedAt
         self.endedAt = nil
         self.allocationModeRaw = allocationMode.rawValue
-        self.note = ""
+        self.note = nil
         self.allocations = []
         self.appSegments = []
     }

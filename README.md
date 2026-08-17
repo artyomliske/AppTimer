@@ -6,7 +6,7 @@
 
 ## Скачать
 
-Готовый образ для Apple Silicon доступен через официальный GitHub Release: **[AppTimer 1.4.0 — DMG для arm64](https://github.com/artyomliske/AppTimer/releases/download/v1.4.0/AppTimer-1.4.0-arm64.dmg)**. Страница релиза: [AppTimer 1.4.0 — Calm Focus](https://github.com/artyomliske/AppTimer/releases/tag/v1.4.0).
+Готовый образ для Apple Silicon доступен через официальный GitHub Release: **[AppTimer 1.4.1 — DMG для arm64](https://github.com/artyomliske/AppTimer/releases/download/v1.4.1/AppTimer-1.4.1-arm64.dmg)**. Страница релиза: [AppTimer 1.4.1 — исправление запуска](https://github.com/artyomliske/AppTimer/releases/tag/v1.4.1).
 
 1. Скачайте и откройте DMG.
 2. Перетащите `AppTimer.app` в папку `Applications`.
@@ -34,6 +34,10 @@
 | Недавние проекты | До пяти последних проектов доступны для быстрого выбора в Menu Bar. |
 | Focus Companion | Настраиваемые роли рабочих, нейтральных и отвлекающих приложений; мягкие локальные напоминания при длительном отвлечении. |
 | Calm Focus | Focus Pulse в Menu Bar, блоки на 25 / 50 / 90 минут, кольцо концентрации и недельная тепловая карта. |
+
+## Что нового в 1.4.1
+
+Патч-версия **1.4.1** исправляет миграцию ранее созданного локального хранилища. Комментарий интервала теперь совместим со старыми записями, поэтому AppTimer открывает существующую базу без удаления накопленных проектов, сессий и сегментов приложений.
 
 ## Что нового в 1.4
 

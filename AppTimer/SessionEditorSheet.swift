@@ -12,7 +12,7 @@ struct SessionEditorSheet: View {
         self.session = session
         _startedAt = State(initialValue: session.startedAt)
         _endedAt = State(initialValue: session.endedAt ?? .now)
-        _note = State(initialValue: session.note)
+        _note = State(initialValue: session.note ?? "")
     }
 
     var body: some View {
