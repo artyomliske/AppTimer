@@ -1,14 +1,26 @@
-// AppTimer CSV export: writes a UTF-8 project summary through the standard macOS save panel.
+// AppTimer CSV export: writes a UTF-8 project summary with client and billing columns.
 import AppKit
 import Foundation
 
 @MainActor
 enum CSVExporter {
-    static func export(projects: [ProjectDuration], period: String) {
-        let header = "Период,Проект,Фактическое время (сек),Распределённое время (сек)"
+    static func export(projects: [ProjectDuration], catalog: [UUID: Project], period: String) {
+        let header = "Период,Проект,Клиент,Ставка в час,Фактическое время (сек),Распределённое время (сек),Сумма"
         let rows = projects.map { row in
-            [escape(period), escape(row.name), String(Int(row.actual)), String(Int(row.allocated))].joined(separator: ",")
+            let project = catalog[row.id]
+            let rate = project?.hourlyRate ?? 0
+            let amount = rate > 0 ? (row.allocated / 3600.0) * rate : 0
+            return [
+                escape(period),
+                escape(row.name),
+                escape(project?.clientName ?? ""),
+                String(format: "%.2f", rate),
+                String(Int(row.actual)),
+                String(Int(row.allocated)),
+                String(format: "%.2f", amount)
+            ].joined(separator: ",")
         }
+
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "AppTimer-\(period).csv"
         panel.allowedContentTypes = [.commaSeparatedText]

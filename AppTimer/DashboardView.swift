@@ -91,6 +91,7 @@ private struct TodayView: View {
 private struct ProjectsView: View {
     @Environment(AppTimerStore.self) private var store
     @State private var newProjectName = ""
+    @State private var editingProject: Project?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -113,6 +114,8 @@ private struct ProjectsView: View {
                             Text(project.isArchived ? "В архиве" : "Активный проект").font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
+                        Button("Реквизиты") { editingProject = project }
+                            .buttonStyle(.borderless)
                         Toggle("Выбран", isOn: Binding(
                             get: { store.selectedProjectIDs.contains(project.id) },
                             set: { _ in store.toggleProject(project) }
@@ -130,6 +133,7 @@ private struct ProjectsView: View {
         }
         .padding(28)
         .navigationTitle("Проекты")
+        .sheet(item: $editingProject) { ProjectDetailsSheet(project: $0) }
     }
 
     private func addProject() {
@@ -141,6 +145,7 @@ private struct ProjectsView: View {
 private struct ReportsView: View {
     @Environment(AppTimerStore.self) private var store
     @State private var period: ReportPeriod = .today
+    @State private var editingSession: WorkSession?
 
     var interval: DateInterval {
         switch period {
@@ -165,7 +170,8 @@ private struct ReportsView: View {
                 .pickerStyle(.segmented)
                 .frame(width: 270)
                 Button("Экспорт CSV") {
-                    CSVExporter.export(projects: rows, period: period.title)
+                    let catalog = Dictionary(uniqueKeysWithValues: store.projects.map { ($0.id, $0) })
+                    CSVExporter.export(projects: rows, catalog: catalog, period: period.title)
                 }
             }
 
@@ -201,6 +207,8 @@ private struct ReportsView: View {
                             Text(session.startedAt, format: .dateTime.day().month().hour().minute())
                             Spacer()
                             Text(session.duration().appTimerText).monospacedDigit()
+                            Button("Править") { editingSession = session }
+                                .buttonStyle(.borderless)
                             Button("Удалить", role: .destructive) { store.deleteCompletedSession(session) }
                                 .buttonStyle(.borderless)
                         }
@@ -232,6 +240,7 @@ private struct ReportsView: View {
         }
         .padding(28)
         .navigationTitle("Отчёты")
+        .sheet(item: $editingSession) { SessionEditorSheet(session: $0) }
     }
 }
 
@@ -268,19 +277,78 @@ private struct SettingsView: View {
                     Text(error).font(.caption).foregroundStyle(.red)
                 }
             }
+            Section("Напоминания и пауза") {
+                Toggle("Останавливать учёт при бездействии", isOn: Binding(
+                    get: { store.idlePauseEnabled },
+                    set: { store.setIdlePauseEnabled($0) }
+                ))
+                if store.idlePauseEnabled {
+                    Stepper("Пауза через \(store.idlePauseMinutes) мин", value: Binding(
+                        get: { store.idlePauseMinutes },
+                        set: { store.setIdlePauseMinutes($0) }
+                    ), in: 1...120)
+                    Text("После отсутствия действий мышью или клавиатурой AppTimer завершит текущий интервал и пришлёт локальное уведомление.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Toggle("Напоминать, когда проект не выбран", isOn: Binding(
+                    get: { store.unassignedReminderEnabled },
+                    set: { store.setUnassignedReminderEnabled($0) }
+                ))
+                if store.unassignedReminderEnabled {
+                    Stepper("Напоминание через \(store.unassignedReminderMinutes) мин", value: Binding(
+                        get: { store.unassignedReminderMinutes },
+                        set: { store.setUnassignedReminderMinutes($0) }
+                    ), in: 1...120)
+                    Text("Напоминание появляется только при активном использовании Mac, когда учёт остановлен и ни один проект не выбран.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
             Section("Приватность") {
                 LabeledContent("Хранилище", value: "Только на этом Mac")
                 LabeledContent("Контекст приложений", value: "Название и bundle identifier")
                 Text("AppTimer не записывает содержимое окон, сайты, введённый текст или данные в облако.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Section("Следующие возможности") {
-                Text("Исключение приложений и экспорт CSV будут добавлены после проверки базового сценария учёта.")
-                    .foregroundStyle(.secondary)
-            }
         }
         .formStyle(.grouped)
         .navigationTitle("Настройки")
+    }
+}
+
+private struct ProjectDetailsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(AppTimerStore.self) private var store
+    let project: Project
+    @State private var clientName: String
+    @State private var hourlyRate: String
+    @State private var weeklyGoalHours: String
+
+    init(project: Project) {
+        self.project = project
+        _clientName = State(initialValue: project.clientName ?? "")
+        _hourlyRate = State(initialValue: project.hourlyRate.map { String(format: "%.0f", $0) } ?? "")
+        _weeklyGoalHours = State(initialValue: project.weeklyGoalMinutes.map { String($0 / 60) } ?? "")
+    }
+
+    var body: some View {
+        Form {
+            TextField("Клиент", text: $clientName)
+            TextField("Ставка в час", text: $hourlyRate)
+            TextField("Цель часов в неделю", text: $weeklyGoalHours)
+            HStack {
+                Spacer()
+                Button("Отмена") { dismiss() }
+                Button("Сохранить") {
+                    let rate = Double(hourlyRate.replacingOccurrences(of: ",", with: "."))
+                    let goalMinutes = Int(weeklyGoalHours).map { $0 * 60 }
+                    store.updateProject(project, clientName: clientName, hourlyRate: rate, weeklyGoalMinutes: goalMinutes)
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(24)
+        .frame(width: 420)
     }
 }
 

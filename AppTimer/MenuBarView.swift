@@ -24,6 +24,26 @@ struct MenuBarView: View {
             }
 
             Divider()
+
+            if !store.recentProjects.isEmpty {
+                Text("Недавние проекты").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                ForEach(store.recentProjects) { project in
+                    Button { store.selectRecentProject(project) } label: {
+                        HStack(spacing: 8) {
+                            Circle().fill(Color(hex: project.colorHex)).frame(width: 8, height: 8)
+                            Text(project.name).lineLimit(1)
+                            Spacer()
+                            if store.selectedProjectIDs == [project.id] {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+                Divider()
+            }
+
             Text("Текущие проекты").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
 
             if store.projects.filter({ !$0.isArchived }).isEmpty {

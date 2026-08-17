@@ -33,6 +33,9 @@ final class Project {
     var colorHex: String
     var createdAt: Date
     var isArchived: Bool
+    var clientName: String?
+    var hourlyRate: Double?
+    var weeklyGoalMinutes: Int?
 
     init(name: String, colorHex: String = "397CFF") {
         self.id = UUID()
@@ -40,6 +43,9 @@ final class Project {
         self.colorHex = colorHex
         self.createdAt = Date()
         self.isArchived = false
+        self.clientName = nil
+        self.hourlyRate = nil
+        self.weeklyGoalMinutes = nil
     }
 }
 
@@ -49,6 +55,7 @@ final class WorkSession {
     var startedAt: Date
     var endedAt: Date?
     var allocationModeRaw: String
+    var note: String
     @Relationship(deleteRule: .cascade) var allocations: [SessionProjectAllocation]
     @Relationship(deleteRule: .cascade) var appSegments: [AppSegment]
 
@@ -57,6 +64,7 @@ final class WorkSession {
         self.startedAt = startedAt
         self.endedAt = nil
         self.allocationModeRaw = allocationMode.rawValue
+        self.note = ""
         self.allocations = []
         self.appSegments = []
     }

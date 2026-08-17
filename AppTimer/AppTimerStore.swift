@@ -18,8 +18,12 @@ final class AppTimerStore {
 
     @ObservationIgnored private var modelContext: ModelContext?
     @ObservationIgnored private var workspaceMonitor = WorkspaceMonitor()
+    @ObservationIgnored private var idleMonitor = IdleMonitor()
+    @ObservationIgnored private var notificationManager = LocalNotificationManager()
     @ObservationIgnored private var ticker: Timer?
     @ObservationIgnored private var activeSegment: AppSegment?
+    @ObservationIgnored private var unassignedActivityStartedAt: Date?
+    @ObservationIgnored private var lastUnassignedReminderAt: Date?
     @ObservationIgnored private var isConfigured = false
 
     var defaultAllocationMode: AllocationMode {
@@ -32,8 +36,42 @@ final class AppTimerStore {
         set { UserDefaults.standard.set(Array(newValue).sorted(), forKey: "excludedBundleIdentifiers") }
     }
 
+    var idlePauseEnabled: Bool {
+        UserDefaults.standard.object(forKey: "idlePauseEnabled") as? Bool ?? true
+    }
+
+    var idlePauseMinutes: Int {
+        max(1, UserDefaults.standard.object(forKey: "idlePauseMinutes") as? Int ?? 10)
+    }
+
+    var unassignedReminderEnabled: Bool {
+        UserDefaults.standard.object(forKey: "unassignedReminderEnabled") as? Bool ?? true
+    }
+
+    var unassignedReminderMinutes: Int {
+        max(1, UserDefaults.standard.object(forKey: "unassignedReminderMinutes") as? Int ?? 15)
+    }
+
+    private var recentProjectIDs: [UUID] {
+        get {
+            (UserDefaults.standard.stringArray(forKey: "recentProjectIDs") ?? [])
+                .compactMap(UUID.init(uuidString:))
+        }
+        set {
+            UserDefaults.standard.set(newValue.map(\.uuidString), forKey: "recentProjectIDs")
+        }
+    }
+
     var selectedProjects: [Project] {
         projects.filter { selectedProjectIDs.contains($0.id) }
+    }
+
+    var recentProjects: [Project] {
+        let byID = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) })
+        return recentProjectIDs.compactMap { id in
+            guard let project = byID[id], !project.isArchived else { return nil }
+            return project
+        }
     }
 
     var isTracking: Bool { activeSession != nil }
@@ -71,10 +109,17 @@ final class AppTimerStore {
         workspaceMonitor.onSystemPause = { [weak self] in
             self?.stopTracking(reason: "Учёт остановлен во время сна Mac")
         }
+        idleMonitor.onIdleThresholdReached = { [weak self] in
+            self?.pauseForInactivity()
+        }
+        if idlePauseEnabled {
+            idleMonitor.start(threshold: TimeInterval(idlePauseMinutes * 60))
+        }
         workspaceMonitor.start()
         ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.now = .now
+                self?.checkUnassignedProjectReminder()
             }
         }
         refresh()
@@ -153,6 +198,7 @@ final class AppTimerStore {
             statusMessage = "Выберите хотя бы один проект"
             return
         }
+        rememberRecentProjects(currentProjects)
         let session = WorkSession(allocationMode: selectedAllocationMode)
         let weights = AllocationEngine.weights(for: currentProjects, mode: selectedAllocationMode, customWeights: customWeights)
         modelContext.insert(session)
@@ -184,10 +230,59 @@ final class AppTimerStore {
         defaultAllocationMode = mode
     }
 
-    func updateCompletedSession(_ session: WorkSession, startedAt: Date, endedAt: Date) {
+    func setIdlePauseEnabled(_ enabled: Bool) {
+        UserDefaults.standard.set(enabled, forKey: "idlePauseEnabled")
+        if enabled {
+            notificationManager.requestAuthorizationIfNeeded()
+            idleMonitor.start(threshold: TimeInterval(idlePauseMinutes * 60))
+        } else {
+            idleMonitor.stop()
+        }
+    }
+
+    func setIdlePauseMinutes(_ minutes: Int) {
+        let value = max(1, minutes)
+        UserDefaults.standard.set(value, forKey: "idlePauseMinutes")
+        idleMonitor.updateThreshold(TimeInterval(value * 60))
+    }
+
+    func setUnassignedReminderEnabled(_ enabled: Bool) {
+        UserDefaults.standard.set(enabled, forKey: "unassignedReminderEnabled")
+        if enabled { notificationManager.requestAuthorizationIfNeeded() }
+        unassignedActivityStartedAt = nil
+        lastUnassignedReminderAt = nil
+    }
+
+    func setUnassignedReminderMinutes(_ minutes: Int) {
+        UserDefaults.standard.set(max(1, minutes), forKey: "unassignedReminderMinutes")
+        unassignedActivityStartedAt = nil
+        lastUnassignedReminderAt = nil
+    }
+
+    func selectRecentProject(_ project: Project) {
+        guard !project.isArchived else { return }
+        let shouldRestart = isTracking
+        if shouldRestart { closeActiveSession() }
+        selectedProjectIDs = [project.id]
+        if selectedAllocationMode == .customWeights, customWeights[project.id] == nil {
+            customWeights[project.id] = 1
+        }
+        if shouldRestart { startTracking() }
+        updateIdleStatus()
+    }
+
+    func updateCompletedSession(_ session: WorkSession, startedAt: Date, endedAt: Date, note: String = "") {
         guard session.endedAt != nil, endedAt > startedAt else { return }
         session.startedAt = startedAt
         session.endedAt = endedAt
+        session.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        saveAndRefresh()
+    }
+
+    func updateProject(_ project: Project, clientName: String, hourlyRate: Double?, weeklyGoalMinutes: Int?) {
+        project.clientName = clientName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : clientName
+        project.hourlyRate = hourlyRate
+        project.weeklyGoalMinutes = weeklyGoalMinutes
         saveAndRefresh()
     }
 
@@ -246,5 +341,47 @@ final class AppTimerStore {
         if !isTracking {
             statusMessage = selectedProjectIDs.isEmpty ? "Выберите проект, чтобы начать учёт" : "Готово к началу учёта"
         }
+    }
+
+    private func rememberRecentProjects(_ projects: [Project]) {
+        var ids = recentProjectIDs
+        for project in projects.reversed() {
+            ids.removeAll { $0 == project.id }
+            ids.insert(project.id, at: 0)
+        }
+        recentProjectIDs = Array(ids.prefix(5))
+    }
+
+    private func pauseForInactivity() {
+        guard idlePauseEnabled, isTracking else { return }
+        stopTracking(reason: "Учёт приостановлен: нет активности \(idlePauseMinutes) мин")
+        notificationManager.post(
+            identifier: "apptimer.idle-pause",
+            title: "Учёт приостановлен",
+            body: "AppTimer остановил учёт после \(idlePauseMinutes) мин бездействия."
+        )
+    }
+
+    private func checkUnassignedProjectReminder() {
+        guard unassignedReminderEnabled,
+              !isTracking,
+              selectedProjectIDs.isEmpty,
+              idleMonitor.secondsSinceUserInput < 90 else {
+            unassignedActivityStartedAt = nil
+            return
+        }
+
+        let currentTime = Date()
+        if unassignedActivityStartedAt == nil { unassignedActivityStartedAt = currentTime }
+        guard let startedAt = unassignedActivityStartedAt,
+              currentTime.timeIntervalSince(startedAt) >= TimeInterval(unassignedReminderMinutes * 60),
+              lastUnassignedReminderAt == nil || currentTime.timeIntervalSince(lastUnassignedReminderAt!) >= TimeInterval(unassignedReminderMinutes * 60) else { return }
+
+        notificationManager.post(
+            identifier: "apptimer.project-reminder",
+            title: "Выберите проект",
+            body: "Вы используете Mac, но AppTimer пока не учитывает время."
+        )
+        lastUnassignedReminderAt = currentTime
     }
 }
