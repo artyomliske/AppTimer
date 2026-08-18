@@ -9,3 +9,8 @@ xcuserdata/
 
 # Local project settings
 *.swp
+
+# Local release artifacts — release files are attached to GitHub Releases.
+.build/
+releases/*.dmg
+releases/*.sha256
