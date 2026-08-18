@@ -7,7 +7,15 @@ class AppTimerModelTests: XCTestCase {
     private var modelContainer: ModelContainer!
     private var modelContext: ModelContext!
 
+    private let preferenceKeys = [
+        "defaultAllocationMode", "excludedBundleIdentifiers", "idlePauseEnabled", "idlePauseMinutes",
+        "unassignedReminderEnabled", "unassignedReminderMinutes", "focusModeEnabled", "distractionAlertMinutes",
+        "distractionReminderCooldownMinutes", "focusWorkBundleIdentifiers", "focusDistractingBundleIdentifiers",
+        "focusApplicationNames", "recentProjectIDs", "activeSessionHeartbeatID", "activeSessionHeartbeatDate"
+    ]
+
     override func setUpWithError() throws {
+        resetPreferences()
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         modelContainer = try ModelContainer(
             for: Project.self,
@@ -20,6 +28,7 @@ class AppTimerModelTests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
+        resetPreferences()
         modelContext = nil
         modelContainer = nil
     }
@@ -30,11 +39,18 @@ class AppTimerModelTests: XCTestCase {
         return project
     }
 
-    func makeSession(start: Date, end: Date?) -> WorkSession {
-        let session = WorkSession(startedAt: start, allocationMode: .equal)
+    func makeSession(start: Date, end: Date?, mode: AllocationMode = .equal) -> WorkSession {
+        let session = WorkSession(startedAt: start, allocationMode: mode)
         session.endedAt = end
         modelContext.insert(session)
         return session
+    }
+
+    func makeAllocation(project: Project, session: WorkSession, weight: Double) -> SessionProjectAllocation {
+        let allocation = SessionProjectAllocation(project: project, session: session, weight: weight)
+        session.allocations.append(allocation)
+        modelContext.insert(allocation)
+        return allocation
     }
 
     func makeSegment(bundleIdentifier: String, appName: String, session: WorkSession, startedAt: Date, endedAt: Date?) -> AppSegment {
@@ -42,6 +58,19 @@ class AppTimerModelTests: XCTestCase {
         segment.endedAt = endedAt
         modelContext.insert(segment)
         return segment
+    }
+
+    func makeStore() -> AppTimerStore {
+        UserDefaults.standard.set(false, forKey: "idlePauseEnabled")
+        UserDefaults.standard.set(false, forKey: "unassignedReminderEnabled")
+        UserDefaults.standard.set(false, forKey: "focusModeEnabled")
+        let store = AppTimerStore()
+        store.configure(with: modelContext)
+        return store
+    }
+
+    private func resetPreferences() {
+        preferenceKeys.forEach(UserDefaults.standard.removeObject(forKey:))
     }
 }
 
@@ -56,6 +85,11 @@ final class AllocationEngineTests: AppTimerModelTests {
 
         XCTAssertEqual(weights.values.reduce(0, +), 1, accuracy: 0.000_001)
         projects.forEach { XCTAssertEqual(weights[$0.id] ?? 0, 1.0 / 3.0, accuracy: 0.000_001) }
+    }
+
+    func testEqualAllocationForSingleProjectIsFullWeight() {
+        let project = makeProject(named: "A")
+        XCTAssertEqual(AllocationEngine.weights(for: [project], mode: .equal, customWeights: [:])[project.id], 1)
     }
 
     func testFullToEachGivesEveryProjectFullWeight() {
@@ -79,6 +113,40 @@ final class AllocationEngineTests: AppTimerModelTests {
         XCTAssertEqual(weights[projects[1].id] ?? 0, 0.75, accuracy: 0.000_001)
     }
 
+    func testCustomWeightsTreatMissingWeightAsZero() {
+        let projects = [makeProject(named: "A"), makeProject(named: "B")]
+        let weights = AllocationEngine.weights(for: projects, mode: .customWeights, customWeights: [projects[0].id: 4])
+
+        XCTAssertEqual(weights[projects[0].id], 1)
+        XCTAssertEqual(weights[projects[1].id], 0)
+    }
+
+    func testCustomWeightsIgnoreUnselectedProject() {
+        let projects = [makeProject(named: "A"), makeProject(named: "B")]
+        let unrelated = UUID()
+        let weights = AllocationEngine.weights(
+            for: projects,
+            mode: .customWeights,
+            customWeights: [projects[0].id: 3, projects[1].id: 1, unrelated: 100]
+        )
+
+        XCTAssertEqual(weights[projects[0].id], 0.75, accuracy: 0.000_001)
+        XCTAssertEqual(weights[projects[1].id], 0.25, accuracy: 0.000_001)
+        XCTAssertNil(weights[unrelated])
+    }
+
+    func testCustomDecimalWeightsRemainNormalized() {
+        let projects = [makeProject(named: "A"), makeProject(named: "B"), makeProject(named: "C")]
+        let weights = AllocationEngine.weights(
+            for: projects,
+            mode: .customWeights,
+            customWeights: [projects[0].id: 0.1, projects[1].id: 0.2, projects[2].id: 0.7]
+        )
+
+        XCTAssertEqual(weights.values.reduce(0, +), 1, accuracy: 0.000_001)
+        XCTAssertEqual(weights[projects[2].id], 0.7, accuracy: 0.000_001)
+    }
+
     func testZeroCustomWeightsFallBackToEqualAllocation() {
         let projects = [makeProject(named: "A"), makeProject(named: "B")]
         let weights = AllocationEngine.weights(
@@ -89,6 +157,23 @@ final class AllocationEngineTests: AppTimerModelTests {
 
         XCTAssertEqual(weights[projects[0].id] ?? 0, 0.5, accuracy: 0.000_001)
         XCTAssertEqual(weights[projects[1].id] ?? 0, 0.5, accuracy: 0.000_001)
+    }
+
+    func testPercentageRoundsCustomWeight() {
+        let projects = [makeProject(named: "A"), makeProject(named: "B"), makeProject(named: "C")]
+        let percentage = AllocationEngine.percentage(
+            for: projects[0].id,
+            in: projects,
+            mode: .customWeights,
+            customWeights: [projects[0].id: 1, projects[1].id: 1, projects[2].id: 1]
+        )
+
+        XCTAssertEqual(percentage, 33)
+    }
+
+    func testPercentageForUnknownProjectIsZero() {
+        let project = makeProject(named: "A")
+        XCTAssertEqual(AllocationEngine.percentage(for: UUID(), in: [project], mode: .equal, customWeights: [:]), 0)
     }
 }
 
@@ -106,29 +191,80 @@ final class ReportCalculatorTests: AppTimerModelTests {
     func testSessionInsideIntervalKeepsFullDuration() {
         let work = makeSession(start: date(4, 10), end: date(4, 11))
         let interval = DateInterval(start: date(4, 0), end: date(5, 0))
-
         XCTAssertEqual(ReportCalculator.actualDuration(of: work, clippedTo: interval), 3_600)
     }
 
     func testSessionCrossingMidnightIsClippedToDay() {
         let work = makeSession(start: date(4, 23), end: date(5, 1))
         let interval = DateInterval(start: date(5, 0), end: date(6, 0))
-
         XCTAssertEqual(ReportCalculator.actualDuration(of: work, clippedTo: interval), 3_600)
     }
 
     func testOpenSessionUsesProvidedNow() {
         let work = makeSession(start: date(4, 10), end: nil)
         let now = date(4, 12, 30)
-
         XCTAssertEqual(ReportCalculator.actualDuration(of: work, now: now), 9_000)
     }
 
     func testNonOverlappingSessionIsExcluded() {
         let work = makeSession(start: date(1, 10), end: date(1, 11))
         let interval = DateInterval(start: date(4, 0), end: date(5, 0))
-
         XCTAssertTrue(ReportCalculator.sessions(in: interval, from: [work]).isEmpty)
+    }
+
+    func testSessionEndingAtIntervalStartIsExcluded() {
+        let work = makeSession(start: date(3, 23), end: date(4, 0))
+        let interval = DateInterval(start: date(4, 0), end: date(5, 0))
+        XCTAssertTrue(ReportCalculator.sessions(in: interval, from: [work]).isEmpty)
+    }
+
+    func testSessionStartingAtIntervalEndIsExcluded() {
+        let work = makeSession(start: date(5, 0), end: date(5, 1))
+        let interval = DateInterval(start: date(4, 0), end: date(5, 0))
+        XCTAssertTrue(ReportCalculator.sessions(in: interval, from: [work]).isEmpty)
+    }
+
+    func testNegativeClosedSessionDurationIsZero() {
+        let work = makeSession(start: date(4, 11), end: date(4, 10))
+        XCTAssertEqual(ReportCalculator.actualDuration(of: work), 0)
+    }
+
+    func testProjectDurationsKeepActualAndAllocatedValues() {
+        let first = makeProject(named: "A")
+        let second = makeProject(named: "B")
+        let session = makeSession(start: date(4, 10), end: date(4, 11))
+        makeAllocation(project: first, session: session, weight: 0.25)
+        makeAllocation(project: second, session: session, weight: 0.75)
+        let interval = DateInterval(start: date(4, 0), end: date(5, 0))
+        let durations = ReportCalculator.projectDurations(for: [session], interval: interval)
+        let firstDuration = durations.first { $0.id == first.id }
+        let secondDuration = durations.first { $0.id == second.id }
+
+        XCTAssertEqual(firstDuration?.actual, 3_600)
+        XCTAssertEqual(firstDuration?.allocated, 900)
+        XCTAssertEqual(secondDuration?.actual, 3_600)
+        XCTAssertEqual(secondDuration?.allocated, 2_700)
+    }
+
+    func testProjectDurationsAreSortedByAllocatedDuration() {
+        let first = makeProject(named: "A")
+        let second = makeProject(named: "B")
+        let session = makeSession(start: date(4, 10), end: date(4, 11))
+        makeAllocation(project: first, session: session, weight: 0.2)
+        makeAllocation(project: second, session: session, weight: 0.8)
+        let interval = DateInterval(start: date(4, 0), end: date(5, 0))
+
+        XCTAssertEqual(ReportCalculator.projectDurations(for: [session], interval: interval).map(\.id), [second.id, first.id])
+    }
+
+    func testProjectDurationsIgnoreAllocationWithoutProject() {
+        let project = makeProject(named: "A")
+        let session = makeSession(start: date(4, 10), end: date(4, 11))
+        let allocation = makeAllocation(project: project, session: session, weight: 1)
+        allocation.project = nil
+        let interval = DateInterval(start: date(4, 0), end: date(5, 0))
+
+        XCTAssertTrue(ReportCalculator.projectDurations(for: [session], interval: interval).isEmpty)
     }
 
     func testApplicationDurationsExcludeConfiguredBundleIdentifier() {
@@ -149,6 +285,34 @@ final class ReportCalculatorTests: AppTimerModelTests {
         XCTAssertEqual(durations.first?.duration ?? 0, 1_800)
     }
 
+    func testApplicationDurationsMergeSegmentsForSameBundleIdentifier() {
+        let work = makeSession(start: date(4, 10), end: date(4, 11))
+        let first = makeSegment(bundleIdentifier: "com.example.editor", appName: "Editor", session: work, startedAt: date(4, 10), endedAt: date(4, 10, 15))
+        let second = makeSegment(bundleIdentifier: "com.example.editor", appName: "Editor", session: work, startedAt: date(4, 10, 30), endedAt: date(4, 11))
+        work.appSegments = [first, second]
+        let interval = DateInterval(start: date(4, 0), end: date(5, 0))
+
+        XCTAssertEqual(ReportCalculator.applicationDurations(for: [work], interval: interval).first?.duration, 2_700)
+    }
+
+    func testApplicationDurationsClipSegmentsToInterval() {
+        let work = makeSession(start: date(4, 8), end: date(4, 16))
+        let segment = makeSegment(bundleIdentifier: "com.example.editor", appName: "Editor", session: work, startedAt: date(4, 9), endedAt: date(4, 15))
+        work.appSegments = [segment]
+        let interval = DateInterval(start: date(4, 10), end: date(4, 12))
+
+        XCTAssertEqual(ReportCalculator.applicationDurations(for: [work], interval: interval).first?.duration, 7_200)
+    }
+
+    func testApplicationDurationsUseProvidedNowForOpenSegment() {
+        let work = makeSession(start: date(4, 10), end: nil)
+        let segment = makeSegment(bundleIdentifier: "com.example.editor", appName: "Editor", session: work, startedAt: date(4, 10), endedAt: nil)
+        work.appSegments = [segment]
+        let interval = DateInterval(start: date(4, 0), end: date(5, 0))
+
+        XCTAssertEqual(ReportCalculator.applicationDurations(for: [work], interval: interval, now: date(4, 10, 45)).first?.duration, 2_700)
+    }
+
     func testFocusDurationsSeparateWorkDistractionAndNeutralContext() {
         let work = makeSession(start: date(4, 10), end: date(4, 11))
         let editor = makeSegment(bundleIdentifier: "com.example.editor", appName: "Editor", session: work, startedAt: date(4, 10), endedAt: date(4, 10, 20))
@@ -167,5 +331,168 @@ final class ReportCalculatorTests: AppTimerModelTests {
         XCTAssertEqual(result.work, 1_200)
         XCTAssertEqual(result.distracting, 1_500)
         XCTAssertEqual(result.neutral, 900)
+    }
+
+    func testFocusDurationsWithEmptyRolesAreNeutral() {
+        let work = makeSession(start: date(4, 10), end: date(4, 11))
+        let segment = makeSegment(bundleIdentifier: "com.example.editor", appName: "Editor", session: work, startedAt: date(4, 10), endedAt: date(4, 11))
+        work.appSegments = [segment]
+        let interval = DateInterval(start: date(4, 0), end: date(5, 0))
+
+        let result = ReportCalculator.focusDurations(for: [work], interval: interval, workBundleIdentifiers: [], distractingBundleIdentifiers: [])
+        XCTAssertEqual(result.work, 0)
+        XCTAssertEqual(result.distracting, 0)
+        XCTAssertEqual(result.neutral, 3_600)
+    }
+
+    func testDistractingRoleTakesPriorityWhenRoleSetsOverlap() {
+        let work = makeSession(start: date(4, 10), end: date(4, 11))
+        let segment = makeSegment(bundleIdentifier: "com.example.chat", appName: "Chat", session: work, startedAt: date(4, 10), endedAt: date(4, 11))
+        work.appSegments = [segment]
+        let interval = DateInterval(start: date(4, 0), end: date(5, 0))
+
+        let result = ReportCalculator.focusDurations(
+            for: [work],
+            interval: interval,
+            workBundleIdentifiers: ["com.example.chat"],
+            distractingBundleIdentifiers: ["com.example.chat"]
+        )
+
+        XCTAssertEqual(result.work, 0)
+        XCTAssertEqual(result.distracting, 3_600)
+    }
+}
+
+final class AppTimerStoreTests: AppTimerModelTests {
+    func testStartTrackingRequiresASelectedProject() {
+        let store = makeStore()
+        store.startTracking()
+
+        XCTAssertFalse(store.isTracking)
+        XCTAssertEqual(store.statusMessage, "Выберите хотя бы один проект")
+    }
+
+    func testStartAndStopTrackingCreateAndCloseSession() {
+        let store = makeStore()
+        store.createProject(named: "A")
+        store.startTracking()
+
+        XCTAssertTrue(store.isTracking)
+        XCTAssertEqual(store.activeSession?.allocations.count, 1)
+        store.stopTracking()
+
+        XCTAssertFalse(store.isTracking)
+        XCTAssertEqual(store.sessions.count, 1)
+        XCTAssertNotNil(store.sessions.first?.endedAt)
+    }
+
+    func testChangingProjectsDuringTrackingClosesAndRestartsSession() {
+        let store = makeStore()
+        store.createProject(named: "A")
+        store.createProject(named: "B")
+        let second = try! XCTUnwrap(store.projects.first { $0.name == "B" })
+        store.toggleProject(second)
+        store.startTracking()
+        let firstSessionID = try! XCTUnwrap(store.activeSession?.id)
+
+        store.toggleProject(second)
+
+        XCTAssertTrue(store.isTracking)
+        XCTAssertNotEqual(store.activeSession?.id, firstSessionID)
+        XCTAssertEqual(store.sessions.count, 2)
+        XCTAssertNotNil(store.sessions.first { $0.id == firstSessionID }?.endedAt)
+    }
+
+    func testChangingAllocationModeDuringTrackingRestartsSession() {
+        let store = makeStore()
+        store.createProject(named: "A")
+        store.startTracking()
+        let firstSessionID = try! XCTUnwrap(store.activeSession?.id)
+
+        store.changeAllocationMode(to: .fullToEach)
+
+        XCTAssertEqual(store.activeSession?.allocationMode, .fullToEach)
+        XCTAssertNotEqual(store.activeSession?.id, firstSessionID)
+        XCTAssertEqual(store.sessions.count, 2)
+    }
+
+    func testUpdatingCustomWeightDuringTrackingRestartsSession() {
+        let store = makeStore()
+        store.createProject(named: "A")
+        let project = try! XCTUnwrap(store.projects.first)
+        store.changeAllocationMode(to: .customWeights)
+        store.startTracking()
+        let firstSessionID = try! XCTUnwrap(store.activeSession?.id)
+
+        store.updateCustomWeight(for: project, percent: 25)
+
+        XCTAssertNotEqual(store.activeSession?.id, firstSessionID)
+        XCTAssertEqual(store.sessions.count, 2)
+        XCTAssertEqual(store.activeSession?.allocationMode, .customWeights)
+    }
+
+    func testFocusSessionRequiresAProject() {
+        let store = makeStore()
+        store.startFocusSession(.short)
+
+        XCTAssertFalse(store.hasActiveFocusSession)
+        XCTAssertEqual(store.statusMessage, "Выберите проект для фокус-сессии")
+    }
+
+    func testFocusSessionStartsTrackingForSelectedProject() {
+        let store = makeStore()
+        store.createProject(named: "A")
+        store.startFocusSession(.short)
+
+        XCTAssertTrue(store.isTracking)
+        XCTAssertEqual(store.activeFocusPreset, .short)
+        XCTAssertEqual(store.focusSessionEndsAt?.timeIntervalSince(store.focusSessionStartedAt ?? .distantPast), 1_500)
+    }
+
+    func testArchivingAProjectClearsItsSelection() {
+        let store = makeStore()
+        store.createProject(named: "A")
+        let project = try! XCTUnwrap(store.projects.first)
+        store.archive(project)
+
+        XCTAssertTrue(project.isArchived)
+        XCTAssertTrue(store.selectedProjectIDs.isEmpty)
+    }
+
+    func testFocusRoleRoundTripUsesLocalSettings() {
+        let store = makeStore()
+        store.setFocusRole(.work, for: "com.example.editor", name: "Editor")
+        XCTAssertEqual(store.focusRole(for: "com.example.editor"), .work)
+
+        store.setFocusRole(.neutral, for: "com.example.editor")
+        XCTAssertEqual(store.focusRole(for: "com.example.editor"), .neutral)
+    }
+
+    func testConfigureRecoversStaleOpenSession() {
+        let session = makeSession(start: Date().addingTimeInterval(-600), end: nil)
+        let store = makeStore()
+
+        XCTAssertNotNil(store.sessions.first?.endedAt)
+        XCTAssertEqual(store.recoveredSessionNotice?.sessionID, session.id)
+    }
+}
+
+final class ModelUtilityTests: AppTimerModelTests {
+    func testWorkSessionClosedDurationUsesEndDate() {
+        let session = makeSession(start: Date(timeIntervalSince1970: 100), end: Date(timeIntervalSince1970: 160))
+        XCTAssertEqual(session.duration(), 60)
+    }
+
+    func testWorkSessionOpenDurationUsesProvidedNow() {
+        let session = makeSession(start: Date(timeIntervalSince1970: 100), end: nil)
+        XCTAssertEqual(session.duration(until: Date(timeIntervalSince1970: 190)), 90)
+    }
+
+    func testCompactTimeIntervalFormattingUsesHoursAndMinutes() {
+        XCTAssertEqual(TimeInterval(5_400).appTimerCompactText, "01:30")
+    }
+
+    func testLongTimeIntervalFormattingUsesRussianUnits() {
+        XCTAssertEqual(TimeInterval(5_400).appTimerText, "1 ч 30 мин")
     }
 }
