@@ -2,6 +2,19 @@
 
 All notable changes to AppTimer are documented here. The project follows semantic versioning: patch releases protect correctness, minor releases add compatible capabilities, and major releases may alter data or workflow concepts.
 
+## 1.7.0 — Core architecture and migration safety
+
+### Changed
+
+- Split the monolithic `AppTimerStore` into `SessionService`, `FocusService`, and `ReminderService`; the Store now coordinates UI-facing state and local system integrations.
+- Replaced direct `UserDefaults` wrappers and manual `focusSettingsRevision` invalidation with observable, typed `AppTimerSettings` while retaining all existing preference keys.
+- Added versioned SwiftData schemas (`AppTimerSchemaV1`, `AppTimerSchemaV2`) and `AppTimerSchemaMigrationPlan` before the Timeline feature changes persistent models.
+
+### Verified
+
+- Added isolated XCTest coverage for settings persistence and sanitization, session recovery, focus completion and cooldowns, unassigned reminders, and migration-plan version boundaries.
+- Documented the migration contract in `Docs/SwiftDataMigration.md`.
+
 ## 1.5.1 — Verified release pipeline
 
 ### Fixed
