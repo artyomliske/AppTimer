@@ -63,6 +63,7 @@ AppTimer 2.1 uses one native macOS visual system across its Menu Bar and Dashboa
 | Project allocation | Equal, full-to-each, and normalized custom-weight modes. |
 | Focus Companion | Local work / neutral / distracting application roles with configurable reminder and cooldown thresholds. |
 | Calm Focus | Focus Pulse, 25/50/90-minute blocks, a focus-context ring, and a seven-day heatmap. |
+| Calm Momentum | Local weekly project goals, an optional focus intention and outcome, plus a manual end-of-day note. |
 | Timeline | An opt-in local app-context timeline, with separate manual project annotations and explicit retro-session conflict handling. |
 | Reports | Project and application summaries, editable completed sessions, client details, rates, and CSV export. |
 | Local reliability | Idle pause, sleep handling, normal-exit closure, heartbeat-based crash recovery, and reviewable recovery notices. |

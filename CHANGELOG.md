@@ -2,6 +2,18 @@
 
 All notable changes to AppTimer are documented here. The project follows semantic versioning: patch releases protect correctness, minor releases add compatible capabilities, and major releases may alter data or workflow concepts.
 
+## 2.2.0 — Calm Momentum
+
+### Added
+
+- Added **Project Momentum**: a local weekly progress view for projects with optional weekly goals, actual allocated time, progress, and remaining effort.
+- Added **Focus Compass**: an optional locally stored intention before a 25/50/90-minute focus block, plus a short editable outcome when the block ends.
+- Added **Close the Day**: a manual local wrap-up with focus reflections, project time and an optional note for tomorrow.
+
+### Privacy
+
+- Focus intentions, outcomes and the Close the Day note stay in local UserDefaults on the Mac. They do not change project assignment, read application content, or create network traffic.
+
 ## 2.1.0 — Focus-first native interface
 
 ### Changed

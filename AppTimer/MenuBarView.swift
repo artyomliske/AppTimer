@@ -120,6 +120,14 @@ struct MenuBarView: View {
                             .buttonStyle(.borderless)
                     }
                 } else {
+                    TextField(
+                        "Намерение (необязательно)",
+                        text: Binding(
+                            get: { store.activeFocusIntent },
+                            set: { store.setFocusIntent($0) }
+                        )
+                    )
+                    .textFieldStyle(.roundedBorder)
                     HStack(spacing: 7) {
                         ForEach(FocusSessionPreset.allCases) { preset in
                             Button(preset.title) { store.startFocusSession(preset) }
