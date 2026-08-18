@@ -1,144 +1,90 @@
 # AppTimer
 
-**AppTimer** — нативное macOS-приложение для ручного учёта времени по одному или нескольким проектам. Оно работает только из **Menu Bar**, хранит данные локально и использует активные приложения только как контекстные метки в отчётах.
+[![CI](https://github.com/artyomliske/AppTimer/actions/workflows/ci.yml/badge.svg)](https://github.com/artyomliske/AppTimer/actions/workflows/ci.yml)
 
-> Проект не выбирается автоматически по программе. Учёт начинается только после ручного выбора хотя бы одного проекта.
+**AppTimer** is a local-first macOS Menu Bar app for intentional, manual time tracking across one or more projects. It combines accurate project allocation, calm focus cues, and private application context without accounts, cloud sync, or telemetry.
 
-## Скачать
+[Русская версия README](README.ru.md)
 
-Готовый образ для Apple Silicon доступен через официальный GitHub Release: **[AppTimer 1.4.3 — установочный DMG для arm64](https://github.com/artyomliske/AppTimer/releases/download/v1.4.3/AppTimer-1.4.3-installer-arm64.dmg)**. В образе есть ярлык `Applications`, поэтому AppTimer можно установить перетаскиванием прямо из окна DMG. Страница релиза: [AppTimer 1.4.3 — целостность данных](https://github.com/artyomliske/AppTimer/releases/tag/v1.4.3).
+> AppTimer never assigns a project automatically. A session starts only after you explicitly choose at least one project.
 
-1. Скачайте и откройте DMG.
-2. Перетащите `AppTimer.app` в папку `Applications`.
-3. Запустите AppTimer из папки «Программы» — значок таймера появится в Menu Bar.
+## Why AppTimer
 
-Образ имеет ad-hoc подпись для проверки целостности на локальном Mac, но не заверен Apple Notarization. При первом запуске macOS может заблокировать приложение как загруженное из интернета. Перетащите `AppTimer.app` в `Applications`, затем в Finder удерживайте **Control**, нажмите приложение и выберите **Открыть → Открыть**. Если macOS всё ещё блокирует запуск, откройте **Системные настройки → Конфиденциальность и безопасность** и нажмите **«Всё равно открыть»** для AppTimer.
+| AppTimer principle | What it means in practice |
+|---|---|
+| Local-first | Your data stays in a local SwiftData store on your Mac. |
+| Manual intent | You decide what is being worked on; application activity never chooses a project for you. |
+| Multi-project allocation | Split a session equally, give its full duration to every selected project, or assign custom weights. |
+| Calm focus support | Use 25, 50, or 90-minute blocks, gentle local reminders, and a compact Focus Pulse in the Menu Bar. |
+| Trustworthy time | A local session heartbeat limits time after an unexpected quit and makes recovered intervals reviewable. |
 
-Терминал используйте только как резервный вариант после скачивания DMG из официального GitHub Release:
+## Install
+
+### GitHub Release
+
+Download the current Apple Silicon installer from [GitHub Releases](https://github.com/artyomliske/AppTimer/releases). Open the DMG and drag `AppTimer` onto the `Applications` shortcut.
+
+### Build locally
+
+Requirements: macOS 14+, Xcode with SwiftData support, and Command Line Tools.
 
 ```bash
-xattr -dr com.apple.quarantine /Applications/AppTimer.app
-open /Applications/AppTimer.app
+git clone https://github.com/artyomliske/AppTimer.git
+cd AppTimer
+make install
 ```
 
-## Возможности
+`make install` builds the app on your Mac and copies it to `/Applications`, so macOS does not attach a download quarantine attribute.
 
-| Возможность | Реализация |
+### About Gatekeeper
+
+Release DMGs are ad-hoc signed but are not Apple-notarized because the project does not currently use a paid Apple Developer account. For a downloaded release, use Finder’s **Control-click → Open → Open** once. If you prefer not to bypass Gatekeeper, build locally with `make install` and inspect the public source code and CI workflow first.
+
+## Features
+
+| Feature | Description |
 |---|---|
-| Работа без Dock | `LSUIElement` включает режим приложения Menu Bar; Dashboard открывается отдельным окном. |
-| Несколько проектов | Во время учёта можно выбрать один или несколько активных проектов. |
-| Три режима распределения | Поровну, полное время каждому и ручные доли. |
-| Локальный трекинг контекста | Фиксируются только название и bundle identifier активной программы. |
-| Отчёты | Экран Today, сводки по проектам и программам, периоды день / неделя / месяц. |
-| Локальное хранение | SwiftData и локальная база без аккаунта, синхронизации и облака. |
-| Защита от сна | Активный интервал останавливается при переходе Mac в сон или выходе из активной сессии. |
-| Автозапуск и горячая клавиша | Можно включить запуск при входе в macOS и управление выбранным проектом сочетанием `⌥⌘T`. |
-| Управление историей | Завершённые интервалы можно отредактировать или удалить. Для интервала доступен комментарий. |
-| Реквизиты проекта | Для проекта поддерживаются клиент, почасовая ставка и недельная цель. |
-| Экспорт и исключения | CSV включает клиентские реквизиты и расчёт суммы; выбранные приложения можно скрыть из отчётов. |
-| Контроль бездействия | По настройке текущий интервал останавливается при отсутствии активности мыши или клавиатуры. |
-| Локальные напоминания | AppTimer напоминает выбрать проект, когда Mac используется, а учёт не запущен. |
-| Недавние проекты | До пяти последних проектов доступны для быстрого выбора в Menu Bar. |
-| Focus Companion | Настраиваемые роли рабочих, нейтральных и отвлекающих приложений; мягкие локальные напоминания при длительном отвлечении. |
-| Calm Focus | Focus Pulse в Menu Bar, блоки на 25 / 50 / 90 минут, кольцо концентрации и недельная тепловая карта. |
+| Menu Bar workflow | Dockless app with a Dashboard window only when you need reports or settings. |
+| Project allocation | Equal, full-to-each, and normalized custom-weight modes. |
+| Focus Companion | Local work / neutral / distracting application roles with configurable reminder and cooldown thresholds. |
+| Calm Focus | Focus Pulse, 25/50/90-minute blocks, a focus-context ring, and a seven-day heatmap. |
+| Reports | Project and application summaries, editable completed sessions, client details, rates, and CSV export. |
+| Local reliability | Idle pause, sleep handling, normal-exit closure, heartbeat-based crash recovery, and reviewable recovery notices. |
 
-## Что нового в 1.4.3
+## Privacy
 
-Версия **1.4.3** защищает локальный учёт от лишнего времени после аварийного закрытия AppTimer. Во время активной сессии приложение сохраняет локальную heartbeat-метку раз в 30 секунд. Если после аварийного разрыва прошло больше двух минут, незакрытый интервал автоматически закрывается последним достоверным временем, а Dashboard предлагает его проверить, отредактировать или удалить.
+AppTimer stores only local project and session data plus the display name and bundle identifier of active applications used as report context. It does not use accounts, cloud storage, telemetry, network requests, website URLs, window contents, keystrokes, clipboard contents, or screen recording.
 
-Сервисы уведомлений, мониторинг приложений и heartbeat теперь запускаются сразу после старта приложения, а не после первого открытия Menu Bar. Ошибки загрузки и сохранения больше не игнорируются: AppTimer записывает локальную диагностику и показывает понятный статус вместо молчаливой потери данных.
+Passive context collection outside a manually running session is not implemented. The project will only add data collection through a clear opt-in setting and documented privacy boundary.
 
-## Что нового в 1.4.1
-
-Патч-версия **1.4.1** исправляет миграцию ранее созданного локального хранилища. Комментарий интервала теперь совместим со старыми записями, поэтому AppTimer открывает существующую базу без удаления накопленных проектов, сессий и сегментов приложений.
-
-## Что нового в 1.4
-
-Версия **1.4.0** добавляет Calm Focus — визуальный слой, который делает состояние концентрации понятным без открытия отчётов. В Menu Bar появился Focus Pulse: его символ и цвет отражают покой, обычный учёт, фокус-сессию, отвлечение или завершение блока.
-
-Теперь можно запустить локальный фокус-блок на **25, 50 или 90 минут** поверх выбранного проекта. AppTimer не останавливает учёт автоматически после завершения блока, а присылает мягкое напоминание о подходящем времени для паузы. Экран «Сегодня» получил кольцо рабочего, отвлекающего и нейтрального контекста, а также семидневную тепловую карту привычек.
-
-## Что нового в 1.3.1
-
-Патч-версия **1.3.1** исправляет запуск локальных уведомлений после перезапуска AppTimer. Если ранее были включены автоматическая пауза, напоминание о невыбранном проекте или Focus Companion, приложение теперь запрашивает системное разрешение на уведомления при запуске, а не только в момент изменения настройки.
-
-## Что нового в 1.3
-
-Версия **1.3.0** добавляет Focus Companion — настраиваемый локальный режим, который работает только во время запущенного учёта. В настройках можно пометить известные приложения как рабочие, нейтральные или отвлекающие, а также вручную добавить приложение по его bundle identifier. Нейтральная роль используется по умолчанию и не приводит к напоминаниям.
-
-Для отвлекающих приложений настраиваются два порога: время до первого напоминания и интервал повторов. Когда активный интервал продолжается, а пользователь остаётся в помеченном приложении, AppTimer показывает локальное уведомление с названием приложения и текущими проектами. В Dashboard появилась сводка рабочего, отвлекающего и нейтрального контекста за день.
-
-Focus Companion не блокирует программы и не анализирует содержимое окон, веб-страницы, нажатия клавиш, буфер обмена или экран. Классификация и расчёты выполняются по уже сохранённым локальным сегментам активных приложений.
-
-## Что нового в 1.2
-
-Версия **1.2.0** расширяет ручной учёт времени без добавления облака или аккаунтов. В Dashboard теперь можно открыть завершённый интервал, поправить его начало и окончание, оставить комментарий либо удалить ошибочную запись. У проекта появились поле клиента, почасовая ставка и недельная цель; отчёты показывают сумму к выставлению, а экспорт CSV сохраняет эти реквизиты вместе с фактическим и распределённым временем.
-
-Приложение также позволяет скрыть служебные программы из отчёта по приложениям. В настройках можно включить локальную автоматическую паузу после выбранного периода бездействия и напоминание о невыбранном проекте при активном использовании Mac. В Menu Bar добавлен раздел с пятью последними проектами, чтобы быстрее переключаться на типовые задачи.
-
-## Режимы распределения
-
-| Режим | Как распределяется интервал | Что видно в отчёте |
-|---|---|---|
-| **Поровну** | Время делится на число выбранных проектов. | Сумма по проектам равна фактическому времени. |
-| **Полностью каждому** | Каждый выбранный проект получает полную длительность. | Сумма по проектам может быть больше фактического времени. |
-| **Ручные доли** | Пользователь задаёт доли для выбранных проектов. | Приложение нормализует введённые веса. |
-
-При изменении выбранных проектов, режима распределения или ручных долей открытый интервал закрывается, а следующий начинается с новой конфигурацией. Это сохраняет исторически точный расчёт уже записанного времени.
-
-## Быстрый старт
-
-Для разработки необходимы **macOS 14.0 или новее** и Xcode с поддержкой SwiftData.
-
-1. Откройте `AppTimer.xcodeproj` в Xcode.
-2. В разделе **Signing & Capabilities** выберите свою команду разработки, если Xcode попросит её указать.
-3. Выберите схему **AppTimer** и нажмите **Run**.
-4. Значок таймера появится в Menu Bar. Создайте проект, отметьте его и нажмите «Начать учёт».
-5. Для расширенного управления и отчётов нажмите «Показать Dashboard».
-
-Проверка через командную строку без подписи выполняется так:
+## Developer workflow
 
 ```bash
-xcodebuild \
-  -project AppTimer.xcodeproj \
-  -scheme AppTimer \
-  -configuration Debug \
-  CODE_SIGNING_ALLOWED=NO \
-  build
+make test     # run XCTest on macOS
+make build    # create a Release build without distribution signing
+make dmg      # create a drag-and-drop installer DMG and SHA-256 file
+make clean    # remove local build output
 ```
 
-## Как устроен учёт
+The shared XCTest target covers allocation contracts and report calculations, including midnight clipping, open sessions, application exclusions, and focus classifications. GitHub Actions runs the test suite for every push and pull request. A version tag triggers a release workflow that tests, builds a DMG, writes a SHA-256 file, and attaches build provenance.
 
-Приложение создаёт `WorkSession` только после явного запуска с хотя бы одним выбранным проектом. В интервале сохраняются выбранные проекты и их веса. Поэтому последующие изменения списка проектов или режима не меняют расчёты для уже завершённых интервалов.
+## Project map
 
-Контекст активной программы собирается через уведомления `NSWorkspace`. AppTimer не читает содержимое окон, URL-адреса, нажатия клавиш, буфер обмена или экран. При активации самого AppTimer дополнительная метка приложения не создаётся.
-
-## Структура проекта
-
-| Путь | Назначение |
+| Path | Responsibility |
 |---|---|
-| `AppTimer/Models.swift` | SwiftData-модели проектов, интервалов, распределений и сегментов программ. |
-| `AppTimer/AllocationEngine.swift` | Расчёт весов для трёх режимов распределения. |
-| `AppTimer/WorkspaceMonitor.swift` | Событийный монитор активных приложений и сна macOS. |
-| `AppTimer/IdleMonitor.swift` | Локальная проверка отсутствия ввода мыши и клавиатуры для автоматической паузы. |
-| `AppTimer/LocalNotificationManager.swift` | Запрос разрешения и показ локальных уведомлений. |
-| `Docs/FocusMode.md` | Правила, настройки и границы приватности Focus Companion. |
-| `Docs/CalmFocusDesign.md` | Визуальная система, фокус-сессии и принципы спокойной индикации. |
-| `Docs/DataIntegrity-v1.4.2.md` | Алгоритм heartbeat, восстановления сессий и ручные сценарии проверки. |
-| `AppTimer/AppTimerStore.swift` | Центральная координация состояния, хранения и жизненного цикла интервала. |
-| `AppTimer/MenuBarView.swift` | Управление выбором проектов и запуском учёта из Menu Bar. |
-| `AppTimer/DashboardView.swift` | Today, проекты, отчёты и настройки. |
-| `AppTimer/DashboardPanelController.swift` | Отдельное Dashboard-окно для dockless-приложения. |
-| `Docs/Architecture.md` | Подробное описание модели и правил первой версии. |
+| `AppTimer/Models.swift` | SwiftData entities and shared domain values. |
+| `AppTimer/AllocationEngine.swift` | Allocation rules for multi-project sessions. |
+| `AppTimer/ReportCalculator.swift` | Time clipping and report aggregation. |
+| `AppTimer/AppTimerStore.swift` | Session lifecycle, local persistence, focus state, and recovery coordination. |
+| `AppTimerTests/` | Fast XCTest coverage for pure allocation and reporting logic. |
+| `Docs/` | Architecture, privacy, focus, Calm Focus, and data-integrity notes. |
 
-## Ограничения
+## What AppTimer intentionally does not do
 
-AppTimer не синхронизирует данные между устройствами, не использует облачное резервное копирование и не выполняет автоматическую классификацию проектов по приложениям. Выбор проекта остаётся ручным, чтобы пользователь всегда контролировал распределение времени.
+AppTimer has no cloud sync, accounts, telemetry, automatic project classification, application blocking, subscriptions, or Windows/Linux version. These boundaries keep the application understandable, local, and under the user’s control.
 
-## Конфиденциальность
+## Contributing
 
-Данные хранятся только на Mac пользователя. AppTimer не использует аккаунты, сетевые запросы, телеметрию или облачное хранилище. Для отчётов сохраняются только даты, длительности, названия проектов, название активной программы и её bundle identifier. Роли Focus Companion — это локальные настройки bundle identifier; они не расширяют состав собираемых данных.
+Please run `make test` before opening a pull request. For user-visible changes, describe whether the change affects local data, privacy boundaries, or existing reports.
 
-## Лицензия
-
-Исходный код предназначен для публикации в открытом репозитории. Перед распространением готовой сборки выберите подходящую лицензию для проекта.
+See [CHANGELOG.md](CHANGELOG.md) for release history. AppTimer is available under the [MIT License](LICENSE).
