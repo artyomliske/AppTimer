@@ -19,16 +19,28 @@ enum AppTimerSchemaV2: VersionedSchema {
     }
 }
 
+enum AppTimerSchemaV3: VersionedSchema {
+    static var versionIdentifier: Schema.Version { Schema.Version(3, 0, 0) }
+
+    // ContextSegment is independent from WorkSession. Its addition is an additive, lightweight migration.
+    static var models: [any PersistentModel.Type] {
+        [Project.self, WorkSession.self, SessionProjectAllocation.self, AppSegment.self, ContextSegment.self]
+    }
+}
+
 enum AppTimerSchemaMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [AppTimerSchemaV1.self, AppTimerSchemaV2.self]
+        [AppTimerSchemaV1.self, AppTimerSchemaV2.self, AppTimerSchemaV3.self]
     }
 
     static var stages: [MigrationStage] {
-        [.lightweight(fromVersion: AppTimerSchemaV1.self, toVersion: AppTimerSchemaV2.self)]
+        [
+            .lightweight(fromVersion: AppTimerSchemaV1.self, toVersion: AppTimerSchemaV2.self),
+            .lightweight(fromVersion: AppTimerSchemaV2.self, toVersion: AppTimerSchemaV3.self)
+        ]
     }
 }
 
 enum AppTimerSchema {
-    static let current = Schema(AppTimerSchemaV2.models)
+    static let current = Schema(AppTimerSchemaV3.models)
 }

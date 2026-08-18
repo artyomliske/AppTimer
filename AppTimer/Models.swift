@@ -187,6 +187,29 @@ final class AppSegment {
     }
 }
 
+// Passive local application context. It intentionally has no relationship to WorkSession:
+// manual sessions are an optional annotation layer over this continuous timeline.
+@Model
+final class ContextSegment {
+    @Attribute(.unique) var id: UUID
+    var bundleIdentifier: String
+    var appName: String
+    var startedAt: Date
+    var endedAt: Date?
+
+    init(bundleIdentifier: String, appName: String, startedAt: Date = .now) {
+        self.id = UUID()
+        self.bundleIdentifier = bundleIdentifier
+        self.appName = appName
+        self.startedAt = startedAt
+        self.endedAt = nil
+    }
+
+    func duration(until now: Date = .now) -> TimeInterval {
+        max(0, (endedAt ?? now).timeIntervalSince(startedAt))
+    }
+}
+
 struct ProjectDuration: Identifiable {
     let id: UUID
     let name: String
