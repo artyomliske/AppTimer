@@ -3,7 +3,7 @@ import SwiftData
 import XCTest
 
 @MainActor
-private class AppTimerModelTests: XCTestCase {
+class AppTimerModelTests: XCTestCase {
     private var modelContainer: ModelContainer!
     private var modelContext: ModelContext!
 
