@@ -4,8 +4,8 @@ import XCTest
 
 @MainActor
 class AppTimerModelTests: XCTestCase {
-    private var modelContainer: ModelContainer!
-    private var modelContext: ModelContext!
+    var modelContainer: ModelContainer!
+    var modelContext: ModelContext!
 
     private let preferenceKeys = [
         "defaultAllocationMode", "excludedBundleIdentifiers", "idlePauseEnabled", "idlePauseMinutes",
