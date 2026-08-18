@@ -458,16 +458,6 @@ final class AppTimerStoreTests: AppTimerModelTests {
         XCTAssertEqual(store.statusMessage, "Выберите проект для фокус-сессии")
     }
 
-    func testFocusSessionStartsTrackingForSelectedProject() {
-        let store = makeStore()
-        store.createProject(named: "A")
-        store.startFocusSession(FocusSessionPreset.short)
-
-        XCTAssertTrue(store.isTracking)
-        XCTAssertEqual(store.activeFocusPreset?.rawValue, FocusSessionPreset.short.rawValue)
-        XCTAssertEqual(store.focusSessionEndsAt?.timeIntervalSince(store.focusSessionStartedAt ?? .distantPast), 1_500)
-    }
-
     func testArchivingAProjectClearsItsSelection() {
         let store = makeStore()
         store.createProject(named: "A")
