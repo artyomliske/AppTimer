@@ -3,6 +3,7 @@ import SwiftData
 import SwiftUI
 
 @main
+@MainActor
 struct AppTimerApp: App {
     @State private var store: AppTimerStore
     @State private var dashboardController = DashboardPanelController()
