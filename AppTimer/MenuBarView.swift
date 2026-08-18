@@ -2,6 +2,7 @@
 import AppKit
 import SwiftUI
 
+@MainActor
 struct MenuBarView: View {
     @Environment(AppTimerStore.self) private var store
     @State private var newProjectName = ""
@@ -171,6 +172,7 @@ struct MenuBarView: View {
     }
 }
 
+@MainActor
 private struct FocusPulseIndicator: View {
     let state: FocusPulseState
     let progress: Double

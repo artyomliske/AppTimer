@@ -50,6 +50,7 @@ struct AppTimerApp: App {
     }
 }
 
+@MainActor
 private struct MenuBarRootView: View {
     let showDashboard: () -> Void
 

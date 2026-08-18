@@ -1,6 +1,7 @@
 // AppTimer Dashboard: local reports for today, projects, reports and allocation settings.
 import SwiftUI
 
+@MainActor
 struct DashboardView: View {
     @Environment(AppTimerStore.self) private var store
     @State private var selection: SidebarItem? = .today
@@ -33,6 +34,7 @@ private enum SidebarItem: Hashable {
     case today, projects, reports, settings
 }
 
+@MainActor
 private struct TodayView: View {
     @Environment(AppTimerStore.self) private var store
     @State private var editingRecoveredSession: WorkSession?
@@ -123,6 +125,7 @@ private struct TodayView: View {
     }
 }
 
+@MainActor
 private struct CalmFocusOverview: View {
     @Environment(AppTimerStore.self) private var store
 
@@ -184,6 +187,7 @@ private struct CalmFocusOverview: View {
     }
 }
 
+@MainActor
 private struct FocusRingChart: View {
     let summary: FocusDurationSummary
     let state: FocusPulseState
@@ -227,6 +231,7 @@ private struct FocusRingChart: View {
     }
 }
 
+@MainActor
 private struct WeeklyFocusHeatmap: View {
     @Environment(AppTimerStore.self) private var store
 
@@ -287,6 +292,7 @@ private struct WeeklyFocusHeatmap: View {
     }
 }
 
+@MainActor
 private struct ProjectsView: View {
     @Environment(AppTimerStore.self) private var store
     @State private var newProjectName = ""
@@ -341,6 +347,7 @@ private struct ProjectsView: View {
     }
 }
 
+@MainActor
 private struct ReportsView: View {
     @Environment(AppTimerStore.self) private var store
     @State private var period: ReportPeriod = .today
@@ -572,6 +579,7 @@ private struct SettingsView: View {
     }
 }
 
+@MainActor
 private struct ProjectDetailsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppTimerStore.self) private var store
@@ -615,6 +623,7 @@ private enum ReportPeriod: String, CaseIterable, Identifiable {
     var title: String { switch self { case .today: "День"; case .week: "Неделя"; case .month: "Месяц" } }
 }
 
+@MainActor
 private struct MetricCard: View {
     let title: String
     let value: String
@@ -639,6 +648,7 @@ private struct SummaryRow: Identifiable {
     let color: Color
 }
 
+@MainActor
 private struct SummaryList: View {
     let title: String
     let emptyText: String

@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct SessionEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppTimerStore.self) private var store
