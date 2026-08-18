@@ -25,6 +25,7 @@
 				B10000000000000000000016 /* LocalNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000019 /* LocalNotificationManager.swift */; };
 				B10000000000000000000020 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000020 /* Localization.swift */; };
 				B10000000000000000000021 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000021 /* Localizable.strings */; };
+				B10000000000000000000022 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000024 /* Settings.swift */; };
 				B20000000000000000000001 /* AppTimerCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000001 /* AppTimerCoreTests.swift */; };
 			B20000000000000000000002 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000002 /* Models.swift */; };
 			B20000000000000000000003 /* AllocationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000003 /* AllocationEngine.swift */; };
@@ -35,6 +36,7 @@
 				B20000000000000000000010 /* LocalNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000019 /* LocalNotificationManager.swift */; };
 				B20000000000000000000011 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000020 /* Localization.swift */; };
 				B20000000000000000000012 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000021 /* Localizable.strings */; };
+				B20000000000000000000013 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000024 /* Settings.swift */; };
 				B20000000000000000000005 /* SwiftData.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F10000000000000000000012 /* SwiftData.framework */; };
 			B20000000000000000000006 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F20000000000000000000003 /* XCTest.framework */; };
 /* End PBXBuildFile section */
@@ -62,6 +64,7 @@
 				F10000000000000000000020 /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
 				F10000000000000000000022 /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = ru.lproj/Localizable.strings; sourceTree = "<group>"; };
 				F10000000000000000000023 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+				F10000000000000000000024 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
 				F20000000000000000000001 /* AppTimerCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTimerCoreTests.swift; sourceTree = "<group>"; };
 			F20000000000000000000002 /* AppTimerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppTimerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 			F20000000000000000000003 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
@@ -118,6 +121,7 @@
 					F10000000000000000000019 /* LocalNotificationManager.swift */,
 					F10000000000000000000020 /* Localization.swift */,
 					F10000000000000000000021 /* Localizable.strings */,
+					F10000000000000000000024 /* Settings.swift */,
 					F10000000000000000000009 /* Info.plist */,
 				F10000000000000000000010 /* AppTimer.entitlements */,
 			);
@@ -276,6 +280,7 @@
 					B10000000000000000000015 /* IdleMonitor.swift in Sources */,
 					B10000000000000000000016 /* LocalNotificationManager.swift in Sources */,
 					B10000000000000000000020 /* Localization.swift in Sources */,
+					B10000000000000000000022 /* Settings.swift in Sources */,
 				);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -292,6 +297,7 @@
 					B20000000000000000000009 /* IdleMonitor.swift in Sources */,
 					B20000000000000000000010 /* LocalNotificationManager.swift in Sources */,
 					B20000000000000000000011 /* Localization.swift in Sources */,
+					B20000000000000000000013 /* Settings.swift in Sources */,
 				);
 				runOnlyForDeploymentPostprocessing = 0;
 			};

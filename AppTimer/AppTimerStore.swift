@@ -16,7 +16,6 @@ final class AppTimerStore {
     var activeSession: WorkSession?
     var now = Date()
     var statusMessage = L10n.text("status.choose_project")
-    private(set) var focusSettingsRevision = 0
     var activeFocusPreset: FocusSessionPreset?
     var focusSessionStartedAt: Date?
     var focusSessionEndsAt: Date?
@@ -39,70 +38,63 @@ final class AppTimerStore {
     @ObservationIgnored private var terminationObserver: NSObjectProtocol?
     @ObservationIgnored private let logger = Logger(subsystem: "com.apptimer.app", category: "persistence")
     @ObservationIgnored private var isConfigured = false
-
-    private static let heartbeatSessionIDKey = "activeSessionHeartbeatID"
-    private static let heartbeatDateKey = "activeSessionHeartbeatDate"
     private static let interruptionGraceInterval: TimeInterval = 120
 
+    let settings: AppTimerSettings
+
+    init(settings: AppTimerSettings = AppTimerSettings()) {
+        self.settings = settings
+    }
+
     var defaultAllocationMode: AllocationMode {
-        get { AllocationMode(rawValue: UserDefaults.standard.string(forKey: "defaultAllocationMode") ?? "equal") ?? .equal }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: "defaultAllocationMode") }
+        get { settings.defaultAllocationMode }
+        set { settings.defaultAllocationMode = newValue }
     }
 
     var excludedBundleIdentifiers: Set<String> {
-        get { Set(UserDefaults.standard.stringArray(forKey: "excludedBundleIdentifiers") ?? []) }
-        set { UserDefaults.standard.set(Array(newValue).sorted(), forKey: "excludedBundleIdentifiers") }
+        get { settings.excludedBundleIdentifiers }
+        set { settings.excludedBundleIdentifiers = newValue }
     }
 
     var idlePauseEnabled: Bool {
-        UserDefaults.standard.object(forKey: "idlePauseEnabled") as? Bool ?? true
+        settings.idlePauseEnabled
     }
 
     var idlePauseMinutes: Int {
-        max(1, UserDefaults.standard.object(forKey: "idlePauseMinutes") as? Int ?? 10)
+        settings.idlePauseMinutes
     }
 
     var unassignedReminderEnabled: Bool {
-        UserDefaults.standard.object(forKey: "unassignedReminderEnabled") as? Bool ?? true
+        settings.unassignedReminderEnabled
     }
 
     var unassignedReminderMinutes: Int {
-        max(1, UserDefaults.standard.object(forKey: "unassignedReminderMinutes") as? Int ?? 15)
+        settings.unassignedReminderMinutes
     }
 
     var focusModeEnabled: Bool {
-        _ = focusSettingsRevision
-        return UserDefaults.standard.object(forKey: "focusModeEnabled") as? Bool ?? false
+        settings.focusModeEnabled
     }
 
     var distractionAlertMinutes: Int {
-        _ = focusSettingsRevision
-        return max(1, UserDefaults.standard.object(forKey: "distractionAlertMinutes") as? Int ?? 5)
+        settings.distractionAlertMinutes
     }
 
     var distractionReminderCooldownMinutes: Int {
-        _ = focusSettingsRevision
-        return max(1, UserDefaults.standard.object(forKey: "distractionReminderCooldownMinutes") as? Int ?? 15)
+        settings.distractionReminderCooldownMinutes
     }
 
     var workBundleIdentifiers: Set<String> {
-        _ = focusSettingsRevision
-        return Set(UserDefaults.standard.stringArray(forKey: "focusWorkBundleIdentifiers") ?? [])
+        settings.workBundleIdentifiers
     }
 
     var distractingBundleIdentifiers: Set<String> {
-        _ = focusSettingsRevision
-        return Set(UserDefaults.standard.stringArray(forKey: "focusDistractingBundleIdentifiers") ?? [])
+        settings.distractingBundleIdentifiers
     }
 
     private var recentProjectIDs: [UUID] {
-        get {
-            (UserDefaults.standard.stringArray(forKey: "recentProjectIDs") ?? [])
-                .compactMap(UUID.init(uuidString:))
-        }
-        set {
-            UserDefaults.standard.set(newValue.map(\.uuidString), forKey: "recentProjectIDs")
-        }
+        get { settings.recentProjectIDs }
+        set { settings.recentProjectIDs = newValue }
     }
 
     var selectedProjects: [Project] {
@@ -184,14 +176,13 @@ final class AppTimerStore {
     }
 
     var focusApplications: [FocusApplication] {
-        _ = focusSettingsRevision
-        var names = focusApplicationNames
+        var names = settings.focusApplicationNames
         sessions.forEach { session in
             session.appSegments.forEach { segment in
                 if names[segment.bundleIdentifier] == nil { names[segment.bundleIdentifier] = segment.appName }
             }
         }
-        workBundleIdentifiers.union(distractingBundleIdentifiers).forEach { identifier in
+        settings.workBundleIdentifiers.union(settings.distractingBundleIdentifiers).forEach { identifier in
             if names[identifier] == nil { names[identifier] = identifier }
         }
         return names.map { identifier, name in
@@ -391,7 +382,7 @@ final class AppTimerStore {
     }
 
     func setIdlePauseEnabled(_ enabled: Bool) {
-        UserDefaults.standard.set(enabled, forKey: "idlePauseEnabled")
+        settings.idlePauseEnabled = enabled
         if enabled {
             notificationManager.requestAuthorizationIfNeeded()
             idleMonitor.start(threshold: TimeInterval(idlePauseMinutes * 60))
@@ -401,39 +392,35 @@ final class AppTimerStore {
     }
 
     func setIdlePauseMinutes(_ minutes: Int) {
-        let value = max(1, minutes)
-        UserDefaults.standard.set(value, forKey: "idlePauseMinutes")
-        idleMonitor.updateThreshold(TimeInterval(value * 60))
+        settings.idlePauseMinutes = minutes
+        idleMonitor.updateThreshold(TimeInterval(settings.idlePauseMinutes * 60))
     }
 
     func setUnassignedReminderEnabled(_ enabled: Bool) {
-        UserDefaults.standard.set(enabled, forKey: "unassignedReminderEnabled")
+        settings.unassignedReminderEnabled = enabled
         if enabled { notificationManager.requestAuthorizationIfNeeded() }
         unassignedActivityStartedAt = nil
         lastUnassignedReminderAt = nil
     }
 
     func setUnassignedReminderMinutes(_ minutes: Int) {
-        UserDefaults.standard.set(max(1, minutes), forKey: "unassignedReminderMinutes")
+        settings.unassignedReminderMinutes = minutes
         unassignedActivityStartedAt = nil
         lastUnassignedReminderAt = nil
     }
 
     func setFocusModeEnabled(_ enabled: Bool) {
-        UserDefaults.standard.set(enabled, forKey: "focusModeEnabled")
+        settings.focusModeEnabled = enabled
         if enabled { notificationManager.requestAuthorizationIfNeeded() }
         updateDistractionState(for: enabled ? workspaceMonitor.currentApplication : nil, at: .now)
-        focusSettingsRevision += 1
     }
 
     func setDistractionAlertMinutes(_ minutes: Int) {
-        UserDefaults.standard.set(max(1, minutes), forKey: "distractionAlertMinutes")
-        focusSettingsRevision += 1
+        settings.distractionAlertMinutes = minutes
     }
 
     func setDistractionReminderCooldownMinutes(_ minutes: Int) {
-        UserDefaults.standard.set(max(1, minutes), forKey: "distractionReminderCooldownMinutes")
-        focusSettingsRevision += 1
+        settings.distractionReminderCooldownMinutes = minutes
     }
 
     func focusRole(for bundleIdentifier: String) -> FocusApplicationRole {
@@ -454,15 +441,14 @@ final class AppTimerStore {
         case .distracting: distracting.insert(identifier)
         case .neutral: break
         }
-        UserDefaults.standard.set(Array(work).sorted(), forKey: "focusWorkBundleIdentifiers")
-        UserDefaults.standard.set(Array(distracting).sorted(), forKey: "focusDistractingBundleIdentifiers")
+        settings.workBundleIdentifiers = work
+        settings.distractingBundleIdentifiers = distracting
         if let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
-            var names = focusApplicationNames
+            var names = settings.focusApplicationNames
             names[identifier] = name
-            focusApplicationNames = names
+            settings.focusApplicationNames = names
         }
         updateDistractionState(for: workspaceMonitor.currentApplication, at: .now)
-        focusSettingsRevision += 1
     }
 
     func selectRecentProject(_ project: Project) {
@@ -583,18 +569,8 @@ final class AppTimerStore {
         recentProjectIDs = Array(ids.prefix(5))
     }
 
-    private var focusApplicationNames: [String: String] {
-        get { UserDefaults.standard.dictionary(forKey: "focusApplicationNames") as? [String: String] ?? [:] }
-        set { UserDefaults.standard.set(newValue, forKey: "focusApplicationNames") }
-    }
-
     private var activeSessionHeartbeat: (sessionID: UUID, date: Date)? {
-        guard let rawID = UserDefaults.standard.string(forKey: Self.heartbeatSessionIDKey),
-              let sessionID = UUID(uuidString: rawID),
-              let date = UserDefaults.standard.object(forKey: Self.heartbeatDateKey) as? Date else {
-            return nil
-        }
-        return (sessionID, date)
+        settings.heartbeat()
     }
 
     private func updateHeartbeatIfNeeded() {
@@ -605,15 +581,12 @@ final class AppTimerStore {
 
     private func writeHeartbeat(at date: Date) {
         guard let sessionID = activeSession?.id else { return }
-        UserDefaults.standard.set(sessionID.uuidString, forKey: Self.heartbeatSessionIDKey)
-        UserDefaults.standard.set(date, forKey: Self.heartbeatDateKey)
+        settings.writeHeartbeat(sessionID: sessionID, at: date)
         lastHeartbeatAt = date
     }
 
     private func clearHeartbeat(for sessionID: UUID) {
-        guard activeSessionHeartbeat?.sessionID == sessionID else { return }
-        UserDefaults.standard.removeObject(forKey: Self.heartbeatSessionIDKey)
-        UserDefaults.standard.removeObject(forKey: Self.heartbeatDateKey)
+        settings.clearHeartbeat(for: sessionID)
         lastHeartbeatAt = nil
     }
 
