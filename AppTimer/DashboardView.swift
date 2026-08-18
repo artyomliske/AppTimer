@@ -8,18 +8,39 @@ struct DashboardView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $selection) {
-                Section("AppTimer") {
-                    Label("Сегодня", systemImage: "clock") .tag(SidebarItem.today)
-                    Label("Таймлайн", systemImage: "calendar.day.timeline.left") .tag(SidebarItem.timeline)
-                    Label("Проекты", systemImage: "folder") .tag(SidebarItem.projects)
-                    Label("Отчёты", systemImage: "chart.bar") .tag(SidebarItem.reports)
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .fill(AppTimerVisual.blueGradient)
+                        Image(systemName: "timer")
+                            .font(.headline.weight(.bold))
+                            .foregroundStyle(.white)
+                    }
+                    .frame(width: 34, height: 34)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("AppTimer").font(.headline.weight(.bold))
+                        Text("Локальный фокус").font(.caption2).foregroundStyle(.secondary)
+                    }
+                    Spacer()
                 }
-                Section {
-                    Label("Настройки", systemImage: "gearshape") .tag(SidebarItem.settings)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 18)
+
+                List(selection: $selection) {
+                    Section("Рабочее пространство") {
+                        Label("Сегодня", systemImage: "circle.dotted.circle") .tag(SidebarItem.today)
+                        Label("Таймлайн", systemImage: "calendar.day.timeline.left") .tag(SidebarItem.timeline)
+                        Label("Проекты", systemImage: "square.grid.2x2") .tag(SidebarItem.projects)
+                        Label("Отчёты", systemImage: "chart.bar.xaxis") .tag(SidebarItem.reports)
+                    }
+                    Section("Приложение") {
+                        Label("Настройки", systemImage: "gearshape") .tag(SidebarItem.settings)
+                    }
                 }
+                .listStyle(.sidebar)
             }
-            .navigationTitle("AppTimer")
+            .frame(minWidth: 220)
         } detail: {
             switch selection ?? .today {
             case .today: TodayView()
@@ -44,23 +65,7 @@ private struct TodayView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text("Сегодня").font(.largeTitle.bold())
-                        Text("Локальный обзор вашего рабочего времени.").foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button(store.isTracking ? "Остановить" : "Начать") { store.startOrStopTracking() }
-                        .buttonStyle(.borderedProminent)
-                        .tint(store.isTracking ? .red : .blue)
-                        .disabled(!store.isTracking && store.selectedProjectIDs.isEmpty)
-                }
-
-                HStack(spacing: 14) {
-                    MetricCard(title: "Фактическое время", value: store.todayActualDuration.appTimerText, detail: "все интервалы")
-                    MetricCard(title: "Активный интервал", value: store.elapsedText, detail: store.isTracking ? "идёт учёт" : "учёт остановлен")
-                    MetricCard(title: "Проекты", value: "\(store.selectedProjectIDs.count)", detail: "выбрано сейчас")
-                }
+                TodayFocusHero()
 
                 if let notice = store.recoveredSessionNotice {
                     HStack(alignment: .top, spacing: 12) {
@@ -92,38 +97,227 @@ private struct TodayView: View {
                     .background(.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
                 }
 
-                CalmFocusOverview()
-                WeeklyFocusHeatmap()
-
-                GroupBox("Выбранные проекты") {
-                    if store.selectedProjects.isEmpty {
-                        Text("Выберите проект в Menu Bar или на вкладке «Проекты».").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        FlowLayout(spacing: 8) {
-                            ForEach(store.selectedProjects) { project in
-                                Label(project.name, systemImage: "circle.fill")
-                                    .labelStyle(.titleAndIcon)
-                                    .foregroundStyle(Color(hex: project.colorHex))
-                                    .padding(.horizontal, 9).padding(.vertical, 5)
-                                    .background(Color(hex: project.colorHex).opacity(0.12), in: Capsule())
-                            }
-                        }
-                    }
+                TodayProjectBoard()
+                HStack(alignment: .top, spacing: 18) {
+                    CalmFocusOverview()
+                    WeeklyFocusHeatmap()
                 }
-
-                HStack(alignment: .top, spacing: 22) {
-                    SummaryList(title: "По проектам", emptyText: "Нет завершённых интервалов", rows: store.todayProjectDurations.map {
-                        SummaryRow(name: $0.name, primary: $0.allocated.appTimerText, secondary: "фактически \($0.actual.appTimerText)", color: Color(hex: $0.colorHex))
-                    })
-                    SummaryList(title: "По приложениям", emptyText: "Нет локальных меток программ", rows: store.todayApplicationDurations.map {
-                        SummaryRow(name: $0.name, primary: $0.duration.appTimerText, secondary: nil, color: .secondary)
-                    })
-                }
+                TodayApplicationCard()
             }
-            .padding(28)
+            .padding(32)
+            .frame(maxWidth: 1_260, alignment: .leading)
         }
+        .background(AppTimerVisual.canvas)
         .navigationTitle("Сегодня")
         .sheet(item: $editingRecoveredSession) { SessionEditorSheet(session: $0) }
+    }
+}
+
+@MainActor
+private struct TodayFocusHero: View {
+    @Environment(AppTimerStore.self) private var store
+
+    private var summary: FocusDurationSummary { store.todayFocusDurations }
+    private var focusPercent: Int {
+        guard summary.observed > 0 else { return 0 }
+        return Int((summary.work / summary.observed * 100).rounded())
+    }
+
+    var body: some View {
+        HStack(spacing: 32) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Сегодня")
+                    .font(.system(size: 38, weight: .bold, design: .rounded))
+                Text("Ваш локальный рабочий ритм — без облака и слежения за содержимым.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 20) {
+                    MetricStack(title: "Всего за сегодня", value: store.todayActualDuration.appTimerText, detail: "ручной учёт")
+                    MetricStack(title: store.isTracking ? "Сейчас" : "Выбрано", value: store.isTracking ? store.elapsedText : "\(store.selectedProjectIDs.count)", detail: store.isTracking ? "активный интервал" : "проектов")
+                }
+                .padding(.top, 8)
+
+                Button(store.isTracking ? "Остановить учёт" : "Начать учёт") { store.startOrStopTracking() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .tint(store.isTracking ? .red : AppTimerVisual.blue)
+                    .disabled(!store.isTracking && store.selectedProjectIDs.isEmpty)
+                    .padding(.top, 4)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(spacing: 6) {
+                FocusPercentageRing(percent: focusPercent, state: store.focusPulseState)
+                    .frame(width: 190, height: 190)
+                Text(summary.observed > 0 ? "рабочего контекста" : "настройте роли приложений")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(width: 240)
+        }
+        .padding(28)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(AppTimerVisual.blue.opacity(0.15), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.06), radius: 18, y: 7)
+    }
+}
+
+@MainActor
+private struct FocusPercentageRing: View {
+    let percent: Int
+    let state: FocusPulseState
+
+    private var color: Color {
+        switch state {
+        case .distracted: .orange
+        case .completed: .green
+        default: AppTimerVisual.blue
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            Circle().stroke(AppTimerVisual.blue.opacity(0.10), lineWidth: 16)
+            Circle()
+                .trim(from: 0, to: max(0.02, Double(percent) / 100))
+                .stroke(color, style: StrokeStyle(lineWidth: 16, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            VStack(spacing: 2) {
+                Text("\(percent)%")
+                    .font(.system(size: 42, weight: .bold, design: .rounded))
+                    .foregroundStyle(color)
+                Text("Фокус")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Фокус: \(percent) процентов")
+    }
+}
+
+@MainActor
+private struct MetricStack: View {
+    let title: String
+    let value: String
+    let detail: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(value).font(.title2.weight(.bold)).monospacedDigit()
+            Text(detail).font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+}
+
+@MainActor
+private struct TodayProjectBoard: View {
+    @Environment(AppTimerStore.self) private var store
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Проекты").font(.title2.weight(.bold))
+                    Text("Распределение времени за сегодня").font(.subheadline).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text("\(store.selectedProjectIDs.count) выбрано")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(AppTimerVisual.blue)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(AppTimerVisual.blue.opacity(0.10), in: Capsule())
+            }
+
+            if store.todayProjectDurations.isEmpty {
+                ContentUnavailableView("Пока нет распределённого времени", systemImage: "square.grid.2x2", description: Text("Выберите проекты и начните ручной учёт из Menu Bar."))
+                    .frame(maxWidth: .infinity, minHeight: 170)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 235), spacing: 14)], spacing: 14) {
+                    ForEach(store.todayProjectDurations) { row in
+                        TodayProjectCard(name: row.name, duration: row.allocated.appTimerText, actual: row.actual.appTimerText, color: Color(hex: row.colorHex), share: row.actual > 0 ? min(1, row.allocated / row.actual) : 0)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct TodayProjectCard: View {
+    let name: String
+    let duration: String
+    let actual: String
+    let color: Color
+    let share: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous).fill(color.gradient)
+                    Image(systemName: "folder.fill").foregroundStyle(.white)
+                }
+                .frame(width: 42, height: 42)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(name).font(.headline).lineLimit(1)
+                    Text("распределено сегодня").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            HStack(alignment: .lastTextBaseline) {
+                Text(duration).font(.title2.weight(.bold)).monospacedDigit()
+                Spacer()
+                Text("факт \(actual)").font(.caption).foregroundStyle(.secondary)
+            }
+            ProgressView(value: share)
+                .tint(color)
+        }
+        .padding(18)
+        .background(color.opacity(0.075), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(color.opacity(0.20), lineWidth: 1) }
+    }
+}
+
+@MainActor
+private struct TodayApplicationCard: View {
+    @Environment(AppTimerStore.self) private var store
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Приложения").font(.title2.weight(.bold))
+                    Text("Только локальный контекст во время ручной работы").font(.subheadline).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "lock.fill").foregroundStyle(.secondary)
+            }
+            if store.todayApplicationDurations.isEmpty {
+                Text("Локальные метки появятся после ручного учёта или включения opt-in Timeline.")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 90, alignment: .leading)
+            } else {
+                ForEach(Array(store.todayApplicationDurations.prefix(5))) { row in
+                    HStack(spacing: 12) {
+                        Image(systemName: "app.dashed").foregroundStyle(AppTimerVisual.blue)
+                        Text(row.name).lineLimit(1)
+                        Spacer()
+                        Text(row.duration.appTimerText).monospacedDigit().foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                    }
+                    .padding(.vertical, 7)
+                    Divider()
+                }
+            }
+        }
+        .padding(20)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 
@@ -673,6 +867,16 @@ private struct MetricCard: View {
         .padding(16)
         .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
     }
+}
+
+private enum AppTimerVisual {
+    static let blue = Color(red: 0.13, green: 0.42, blue: 0.95)
+    static let canvas = Color.primary.opacity(0.025)
+    static let blueGradient = LinearGradient(
+        colors: [Color(red: 0.11, green: 0.37, blue: 0.92), Color(red: 0.24, green: 0.60, blue: 1.0)],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
 }
 
 private struct SummaryRow: Identifiable {
