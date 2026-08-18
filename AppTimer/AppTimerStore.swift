@@ -481,10 +481,48 @@ final class AppTimerStore {
 
     func updateCompletedSession(_ session: WorkSession, startedAt: Date, endedAt: Date, note: String = "") {
         guard session.endedAt != nil, endedAt > startedAt else { return }
+        let conflicts = sessionService.overlappingCompletedSessions(
+            sessions.filter { $0.id != session.id },
+            start: startedAt,
+            end: endedAt
+        )
+        guard conflicts.isEmpty else { return }
         session.startedAt = startedAt
         session.endedAt = endedAt
         session.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
         saveAndRefresh()
+    }
+
+    func retroSessionConflicts(start: Date, end: Date) -> [WorkSession] {
+        sessionService.overlappingCompletedSessions(sessions, start: start, end: end)
+    }
+
+    @discardableResult
+    func createRetroSession(
+        start: Date,
+        end: Date,
+        projectIDs: Set<UUID>,
+        allocationMode: AllocationMode,
+        customWeights: [UUID: Double] = [:],
+        resolution: RetroSessionConflictResolution?
+    ) -> Bool {
+        guard let modelContext,
+              end > start,
+              end <= now,
+              !projectIDs.isEmpty else { return false }
+        let projects = self.projects.filter { projectIDs.contains($0.id) && !project.isArchived }
+        guard projects.count == projectIDs.count,
+              sessionService.createRetroSession(
+                start: start,
+                end: end,
+                projects: projects,
+                allocationMode: allocationMode,
+                customWeights: customWeights,
+                existingSessions: sessions,
+                resolution: resolution,
+                in: modelContext
+              ) != nil else { return false }
+        return saveAndRefresh()
     }
 
     func updateProject(_ project: Project, clientName: String, hourlyRate: Double?, weeklyGoalMinutes: Int?) {

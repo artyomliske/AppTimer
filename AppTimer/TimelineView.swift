@@ -5,6 +5,8 @@ import SwiftUI
 struct TimelineView: View {
     @Environment(AppTimerStore.self) private var store
     @State private var selectedDay = Calendar.current.startOfDay(for: .now)
+    @State private var retroDraft: RetroSessionDraft?
+    @State private var editingSession: WorkSession?
 
     private var dayInterval: DateInterval {
         Calendar.current.dateInterval(of: .day, for: selectedDay) ?? DateInterval(start: selectedDay, duration: 86_400)
@@ -39,7 +41,12 @@ struct TimelineView: View {
                         dayInterval: dayInterval,
                         now: store.now,
                         contextSegments: contextSegments,
-                        sessions: sessions
+                        sessions: sessions,
+                        onSelectRange: { start, end in
+                            let adjustedEnd = min(end, store.now)
+                            guard adjustedEnd > start else { return }
+                            retroDraft = RetroSessionDraft(start: start, end: adjustedEnd)
+                        }
                     )
                     .frame(height: 250)
 
@@ -74,11 +81,43 @@ struct TimelineView: View {
                             }
                         }
                     }
+
+                    GroupBox("Ручная разметка") {
+                        if sessions.isEmpty {
+                            Text("Выделите диапазон мышью на ленте, чтобы назначить проект задним числом.")
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, minHeight: 80)
+                        } else {
+                            VStack(spacing: 0) {
+                                ForEach(sessions) { session in
+                                    let names = session.allocations.compactMap { $0.project?.name }.joined(separator: ", ")
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(names.isEmpty ? "Без проекта" : names)
+                                            Text("\(session.startedAt.formatted(date: .omitted, time: .shortened)) – \((session.endedAt ?? store.now).formatted(date: .omitted, time: .shortened))")
+                                                .font(.caption).foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        Text(session.duration(until: store.now).appTimerText).monospacedDigit().foregroundStyle(.secondary)
+                                        Button("Править") { editingSession = session }.buttonStyle(.borderless)
+                                    }
+                                    .padding(.vertical, 5)
+                                    Divider()
+                                }
+                            }
+                        }
+                    }
                 }
             }
             .padding(28)
         }
         .navigationTitle("Таймлайн")
+        .sheet(item: $retroDraft) { draft in
+            RetroSessionSheet(draft: draft)
+        }
+        .sheet(item: $editingSession) { session in
+            SessionEditorSheet(session: session)
+        }
     }
 
     private var header: some View {
@@ -120,6 +159,7 @@ private struct TimelineCanvas: View {
     let now: Date
     let contextSegments: [ContextSegment]
     let sessions: [WorkSession]
+    let onSelectRange: (Date, Date) -> Void
 
     var body: some View {
         GeometryReader { proxy in
@@ -167,6 +207,17 @@ private struct TimelineCanvas: View {
                     )
                 }
             }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 8)
+                    .onEnded { value in
+                        let lower = min(max(0, value.startLocation.x), proxy.size.width)
+                        let upper = min(max(0, value.location.x), proxy.size.width)
+                        let start = TimelineGeometry.date(atX: min(lower, upper), in: dayInterval, width: proxy.size.width)
+                        let end = TimelineGeometry.date(atX: max(lower, upper), in: dayInterval, width: proxy.size.width)
+                        onSelectRange(start, end)
+                    }
+            )
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Лента дня с контекстом приложений и ручными проектными сессиями")
@@ -205,6 +256,14 @@ private enum TimelineGeometry {
         let leading = max(0, min(1, clippedStart.timeIntervalSince(interval.start) / interval.duration))
         let trailing = max(leading, min(1, clippedEnd.timeIntervalSince(interval.start) / interval.duration))
         return CGRect(x: width * leading, y: 0, width: max(2, width * (trailing - leading)), height: 1)
+    }
+
+    static func date(atX x: CGFloat, in interval: DateInterval, width: CGFloat) -> Date {
+        guard width > 0 else { return interval.start }
+        let fraction = max(0, min(1, x / width))
+        let raw = interval.start.addingTimeInterval(interval.duration * fraction)
+        let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: raw)
+        return Calendar.current.date(from: components) ?? raw
     }
 
     static func color(for identifier: String) -> Color {
