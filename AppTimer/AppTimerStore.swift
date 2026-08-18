@@ -510,7 +510,7 @@ final class AppTimerStore {
               end > start,
               end <= now,
               !projectIDs.isEmpty else { return false }
-        let projects = self.projects.filter { projectIDs.contains($0.id) && !project.isArchived }
+        let projects = self.projects.filter { projectIDs.contains($0.id) && !$0.isArchived }
         guard projects.count == projectIDs.count,
               sessionService.createRetroSession(
                 start: start,
