@@ -130,8 +130,8 @@ final class AllocationEngineTests: AppTimerModelTests {
             customWeights: [projects[0].id: 3, projects[1].id: 1, unrelated: 100]
         )
 
-        XCTAssertEqual(weights[projects[0].id], 0.75, accuracy: 0.000_001)
-        XCTAssertEqual(weights[projects[1].id], 0.25, accuracy: 0.000_001)
+        XCTAssertEqual(weights[projects[0].id] ?? 0, 0.75, accuracy: 0.000_001)
+        XCTAssertEqual(weights[projects[1].id] ?? 0, 0.25, accuracy: 0.000_001)
         XCTAssertNil(weights[unrelated])
     }
 
@@ -144,7 +144,7 @@ final class AllocationEngineTests: AppTimerModelTests {
         )
 
         XCTAssertEqual(weights.values.reduce(0, +), 1, accuracy: 0.000_001)
-        XCTAssertEqual(weights[projects[2].id], 0.7, accuracy: 0.000_001)
+        XCTAssertEqual(weights[projects[2].id] ?? 0, 0.7, accuracy: 0.000_001)
     }
 
     func testZeroCustomWeightsFallBackToEqualAllocation() {
