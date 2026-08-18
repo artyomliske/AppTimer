@@ -78,6 +78,10 @@ AppTimer stores only local project and session data plus the display name and bu
 
 Passive context collection outside a manually running session is not implemented. The project will only add data collection through a clear opt-in setting and documented privacy boundary.
 
+## Language
+
+AppTimer follows your macOS language. Russian is the development language and English is included for international use. The language never changes project data, reports, Focus Companion settings, or local privacy boundaries. See [Docs/Localization.md](Docs/Localization.md) for implementation details.
+
 ## Developer workflow
 
 ```bash
