@@ -27,6 +27,10 @@
 			B20000000000000000000002 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000002 /* Models.swift */; };
 			B20000000000000000000003 /* AllocationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000003 /* AllocationEngine.swift */; };
 			B20000000000000000000004 /* ReportCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000005 /* ReportCalculator.swift */; };
+			B20000000000000000000007 /* AppTimerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000006 /* AppTimerStore.swift */; };
+			B20000000000000000000008 /* WorkspaceMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000004 /* WorkspaceMonitor.swift */; };
+			B20000000000000000000009 /* IdleMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000018 /* IdleMonitor.swift */; };
+			B20000000000000000000010 /* LocalNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000019 /* LocalNotificationManager.swift */; };
 			B20000000000000000000005 /* SwiftData.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F10000000000000000000012 /* SwiftData.framework */; };
 			B20000000000000000000006 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F20000000000000000000003 /* XCTest.framework */; };
 /* End PBXBuildFile section */
@@ -251,6 +255,10 @@
 					B20000000000000000000002 /* Models.swift in Sources */,
 					B20000000000000000000003 /* AllocationEngine.swift in Sources */,
 					B20000000000000000000004 /* ReportCalculator.swift in Sources */,
+					B20000000000000000000007 /* AppTimerStore.swift in Sources */,
+					B20000000000000000000008 /* WorkspaceMonitor.swift in Sources */,
+					B20000000000000000000009 /* IdleMonitor.swift in Sources */,
+					B20000000000000000000010 /* LocalNotificationManager.swift in Sources */,
 				);
 				runOnlyForDeploymentPostprocessing = 0;
 			};
