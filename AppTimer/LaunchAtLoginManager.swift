@@ -13,7 +13,7 @@ final class LaunchAtLoginManager {
             else { try SMAppService.mainApp.unregister() }
             errorMessage = nil
         } catch {
-            errorMessage = "Не удалось изменить автозапуск: \(error.localizedDescription)"
+            errorMessage = L10n.format("error.launch_at_login", error.localizedDescription)
         }
     }
 }
