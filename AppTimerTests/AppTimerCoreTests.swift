@@ -568,10 +568,11 @@ final class SessionServiceTests: AppTimerModelTests {
         let project = makeProject(named: "Project")
         let service = SessionService()
         let session = service.start(projects: [project], allocationMode: .equal, customWeights: [:], in: modelContext)
-        let closedAt = Date(timeIntervalSince1970: 2_000)
+        let startedSession = try! XCTUnwrap(session)
+        let closedAt = startedSession.startedAt.addingTimeInterval(60)
 
         XCTAssertEqual(session?.allocations.count, 1)
-        service.close(session: try! XCTUnwrap(session), activeSegment: nil, at: closedAt)
+        service.close(session: startedSession, activeSegment: nil, at: closedAt)
         XCTAssertEqual(session?.endedAt, closedAt)
     }
 
