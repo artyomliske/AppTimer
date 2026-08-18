@@ -225,28 +225,6 @@ final class ContextSegment {
     }
 
     func duration(until now: Date = .now) -> TimeInterval {
-        (endedAt ?? now).timeIntervalSince(startedAt)
-    }
-}
-
-// Passive local application context. Manual sessions remain an optional annotation layer over this timeline.
-@Model
-final class ContextSegment {
-    @Attribute(.unique) var id: UUID
-    var bundleIdentifier: String
-    var appName: String
-    var startedAt: Date
-    var endedAt: Date?
-
-    init(bundleIdentifier: String, appName: String, startedAt: Date = .now) {
-        self.id = UUID()
-        self.bundleIdentifier = bundleIdentifier
-        self.appName = appName
-        self.startedAt = startedAt
-        self.endedAt = nil
-    }
-
-    func duration(until now: Date = .now) -> TimeInterval {
         max(0, (endedAt ?? now).timeIntervalSince(startedAt))
     }
 }
