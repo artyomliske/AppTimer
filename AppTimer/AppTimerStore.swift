@@ -255,8 +255,16 @@ final class AppTimerStore {
         guard let modelContext else { return }
         let projectDescriptor = FetchDescriptor<Project>(sortBy: [SortDescriptor(\Project.name)])
         let sessionDescriptor = FetchDescriptor<WorkSession>(sortBy: [SortDescriptor(\WorkSession.startedAt, order: .reverse)])
-        projects = (try? modelContext.fetch(projectDescriptor)) ?? []
-        sessions = (try? modelContext.fetch(sessionDescriptor)) ?? []
+        do {
+            projects = try modelContext.fetch(projectDescriptor)
+            sessions = try modelContext.fetch(sessionDescriptor)
+            storageErrorMessage = nil
+        } catch {
+            logger.error("Не удалось загрузить локальные данные: \(error.localizedDescription, privacy: .public)")
+            storageErrorMessage = "Не удалось загрузить локальные данные. Перезапустите AppTimer; исходные файлы хранилища не изменены."
+            statusMessage = "Ошибка загрузки локальных данных"
+            return
+        }
         activeSession = sessions.first(where: { $0.endedAt == nil })
         activeSegment = activeSession?.appSegments.last(where: { $0.endedAt == nil })
 
