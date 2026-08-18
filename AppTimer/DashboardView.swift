@@ -443,6 +443,7 @@ private struct ReportsView: View {
     }
 }
 
+@MainActor
 private struct SettingsView: View {
     @Environment(AppTimerStore.self) private var store
     @State private var launchAtLogin = LaunchAtLoginManager()
