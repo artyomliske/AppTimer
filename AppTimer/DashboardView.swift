@@ -287,7 +287,6 @@ private struct TodayProjectCard: View {
 }
 
 @MainActor
-@MainActor
 private struct ProjectMomentumSection: View {
     @Environment(AppTimerStore.self) private var store
 
