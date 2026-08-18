@@ -153,6 +153,42 @@ final class AppTimerStore {
         )
     }
 
+    var weekInterval: DateInterval {
+        Calendar.current.dateInterval(of: .weekOfYear, for: now) ?? todayInterval
+    }
+
+    var projectMomentum: [ProjectMomentum] {
+        let durations = Dictionary(uniqueKeysWithValues: ReportCalculator.projectDurations(for: sessions, interval: weekInterval, now: now).map { ($0.id, $0) })
+        return projects
+            .filter { !$0.isArchived && ($0.weeklyGoalMinutes != nil || selectedProjectIDs.contains($0.id)) }
+            .map { project in
+                let duration = durations[project.id]?.allocated ?? 0
+                return ProjectMomentum(
+                    id: project.id,
+                    name: project.name,
+                    colorHex: project.colorHex,
+                    goal: project.weeklyGoalMinutes.map { TimeInterval($0 * 60) },
+                    completed: duration
+                )
+            }
+            .sorted { lhs, rhs in
+                if selectedProjectIDs.contains(lhs.id) != selectedProjectIDs.contains(rhs.id) {
+                    return selectedProjectIDs.contains(lhs.id)
+                }
+                return lhs.completed > rhs.completed
+            }
+    }
+
+    var activeFocusIntent: String { settings.activeFocusIntent }
+
+    var todayFocusReflections: [FocusReflection] {
+        settings.focusReflections
+            .filter { Calendar.current.isDate($0.completedAt, inSameDayAs: now) }
+            .sorted { $0.completedAt > $1.completedAt }
+    }
+
+    var closeTheDayNote: String { settings.closeTheDayNote }
+
     var todayFocusDurations: FocusDurationSummary {
         ReportCalculator.focusDurations(
             for: sessions,
@@ -336,6 +372,7 @@ final class AppTimerStore {
         if !isTracking { startTracking() }
         guard isTracking else { return }
 
+        settings.activeFocusProjectIDs = Array(selectedProjectIDs)
         focusService.start(preset, at: now)
         notificationManager.requestAuthorizationIfNeeded()
         statusMessage = L10n.format("status.focus", preset.title)
@@ -344,7 +381,21 @@ final class AppTimerStore {
     func cancelFocusSession() {
         guard hasActiveFocusSession else { return }
         focusService.cancel()
+        settings.activeFocusProjectIDs = []
         statusMessage = isTracking ? L10n.text("status.focus_cancelled_tracking") : L10n.text("status.focus_cancelled")
+    }
+
+    func setFocusIntent(_ value: String) {
+        settings.activeFocusIntent = String(value.prefix(240))
+    }
+
+    func setFocusReflectionOutcome(_ outcome: FocusReflectionOutcome, for reflectionID: UUID) {
+        guard let index = settings.focusReflections.firstIndex(where: { $0.id == reflectionID }) else { return }
+        settings.focusReflections[index].outcome = outcome
+    }
+
+    func setCloseTheDayNote(_ value: String) {
+        settings.closeTheDayNote = String(value.prefix(500))
     }
 
     func startTracking() {
@@ -742,7 +793,18 @@ final class AppTimerStore {
     }
 
     private func updateFocusSession() {
+        let projectIDs = settings.activeFocusProjectIDs
+        let intention = settings.activeFocusIntent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let preset = focusService.completeIfNeeded(at: now) else { return }
+        let reflection = FocusReflection(
+            completedAt: now,
+            projectIDs: projectIDs,
+            presetMinutes: preset.minutes,
+            intention: intention
+        )
+        settings.focusReflections = Array((settings.focusReflections + [reflection]).suffix(100))
+        settings.activeFocusIntent = ""
+        settings.activeFocusProjectIDs = []
         statusMessage = L10n.format("status.focus_completed", preset.title)
         notificationManager.post(
             identifier: "apptimer.focus-session-complete",

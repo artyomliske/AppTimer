@@ -52,6 +52,21 @@ final class AppTimerSettings {
     var contextRetention: ContextHistoryRetention {
         didSet { defaults.set(contextRetention.rawValue, forKey: Key.contextRetentionDays) }
     }
+    var activeFocusIntent: String {
+        didSet { defaults.set(activeFocusIntent, forKey: Key.activeFocusIntent) }
+    }
+    var activeFocusProjectIDs: [UUID] {
+        didSet { defaults.set(activeFocusProjectIDs.map(\.uuidString), forKey: Key.activeFocusProjectIDs) }
+    }
+    var focusReflections: [FocusReflection] {
+        didSet {
+            let data = try? JSONEncoder().encode(focusReflections)
+            defaults.set(data, forKey: Key.focusReflections)
+        }
+    }
+    var closeTheDayNote: String {
+        didSet { defaults.set(closeTheDayNote, forKey: Key.closeTheDayNote) }
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -70,6 +85,10 @@ final class AppTimerSettings {
         focusApplicationNames = defaults.dictionary(forKey: Key.focusApplicationNames) as? [String: String] ?? [:]
         passiveContextRecordingEnabled = defaults.object(forKey: Key.passiveContextRecordingEnabled) as? Bool ?? false
         contextRetention = ContextHistoryRetention(rawValue: defaults.object(forKey: Key.contextRetentionDays) as? Int ?? ContextHistoryRetention.days30.rawValue) ?? .days30
+        activeFocusIntent = defaults.string(forKey: Key.activeFocusIntent) ?? ""
+        activeFocusProjectIDs = (defaults.stringArray(forKey: Key.activeFocusProjectIDs) ?? []).compactMap(UUID.init(uuidString:))
+        focusReflections = (defaults.data(forKey: Key.focusReflections)).flatMap { try? JSONDecoder().decode([FocusReflection].self, from: $0) } ?? []
+        closeTheDayNote = defaults.string(forKey: Key.closeTheDayNote) ?? ""
     }
 
     func writeHeartbeat(sessionID: UUID, at date: Date) {
@@ -143,5 +162,9 @@ final class AppTimerSettings {
         static let contextRetentionDays = "contextRetentionDays"
         static let contextHeartbeatSegmentID = "contextHeartbeatSegmentID"
         static let contextHeartbeatDate = "contextHeartbeatDate"
+        static let activeFocusIntent = "activeFocusIntent"
+        static let activeFocusProjectIDs = "activeFocusProjectIDs"
+        static let focusReflections = "focusReflections"
+        static let closeTheDayNote = "closeTheDayNote"
     }
 }

@@ -98,11 +98,13 @@ private struct TodayView: View {
                 }
 
                 TodayProjectBoard()
+                ProjectMomentumSection()
                 HStack(alignment: .top, spacing: 18) {
                     CalmFocusOverview()
                     WeeklyFocusHeatmap()
                 }
                 TodayApplicationCard()
+                CloseTheDayCard()
             }
             .padding(32)
             .frame(maxWidth: 1_260, alignment: .leading)
@@ -285,6 +287,138 @@ private struct TodayProjectCard: View {
 }
 
 @MainActor
+@MainActor
+private struct ProjectMomentumSection: View {
+    @Environment(AppTimerStore.self) private var store
+
+    var body: some View {
+        let items = Array(store.projectMomentum.prefix(3))
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Темп недели").font(.title2.weight(.bold))
+                    Text("Движение к локальным целям проектов").font(.subheadline).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Label("Только этот Mac", systemImage: "lock.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if items.isEmpty {
+                Text("Добавьте недельную цель в реквизитах проекта, чтобы видеть темп. Выбранные проекты также появятся здесь после первого интервала.")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
+            } else {
+                ForEach(items) { item in
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Circle().fill(Color(hex: item.colorHex)).frame(width: 10, height: 10)
+                            Text(item.name).font(.headline).lineLimit(1)
+                            Spacer()
+                            Text(item.completed.appTimerText).monospacedDigit()
+                            if let goal = item.goal {
+                                Text("/ \(goal.appTimerText)").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        if item.goal != nil {
+                            ProgressView(value: item.progress)
+                                .tint(Color(hex: item.colorHex))
+                            HStack {
+                                Text("\(Int((item.progress * 100).rounded()))% цели")
+                                Spacer()
+                                if let remaining = item.remaining, remaining > 0 {
+                                    Text("осталось \(remaining.appTimerText)")
+                                } else {
+                                    Text("цель достигнута")
+                                }
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        } else {
+                            Text("Установите недельную цель в реквизитах проекта.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(13)
+                    .background(Color(hex: item.colorHex).opacity(0.065), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+            }
+        }
+        .padding(20)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+@MainActor
+private struct CloseTheDayCard: View {
+    @Environment(AppTimerStore.self) private var store
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Закрыть день").font(.title2.weight(.bold))
+                    Text("Небольшой локальный итог — его можно заполнить сейчас или пропустить.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(store.todayActualDuration.appTimerText)
+                    .font(.title3.weight(.bold)).monospacedDigit()
+                    .foregroundStyle(AppTimerVisual.blue)
+            }
+
+            if store.todayFocusReflections.isEmpty {
+                Text("После завершения focus-блока здесь появится его намерение и короткий итог.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(store.todayFocusReflections.prefix(3))) { reflection in
+                    HStack(spacing: 10) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(reflection.outcome == .continueLater ? .orange : .green)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(reflection.intention.isEmpty ? "Фокус-блок \(reflection.presetMinutes) мин" : reflection.intention)
+                                .lineLimit(1)
+                            Text(reflection.completedAt, format: .dateTime.hour().minute())
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Picker("Итог", selection: Binding(
+                            get: { reflection.outcome },
+                            set: { store.setFocusReflectionOutcome($0, for: reflection.id) }
+                        )) {
+                            ForEach(FocusReflectionOutcome.allCases) { outcome in
+                                Text(outcome.title).tag(outcome)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(width: 132)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+
+            TextField(
+                "Что продолжить завтра? (необязательно)",
+                text: Binding(
+                    get: { store.closeTheDayNote },
+                    set: { store.setCloseTheDayNote($0) }
+                ),
+                axis: .vertical
+            )
+            .lineLimit(2...4)
+            .textFieldStyle(.roundedBorder)
+        }
+        .padding(20)
+        .background(AppTimerVisual.blue.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(AppTimerVisual.blue.opacity(0.14), lineWidth: 1) }
+    }
+}
+
+@MainActor
 private struct TodayApplicationCard: View {
     @Environment(AppTimerStore.self) private var store
 
@@ -352,6 +486,15 @@ private struct CalmFocusOverview: View {
                             .font(.system(.title2, design: .monospaced).weight(.bold))
                         ProgressView(value: store.focusSessionProgress)
                             .tint(.cyan)
+                        if !store.activeFocusIntent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Label(store.activeFocusIntent, systemImage: "target")
+                                .font(.caption)
+                                .foregroundStyle(AppTimerVisual.blue)
+                                .lineLimit(2)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 6)
+                                .background(AppTimerVisual.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        }
                         HStack {
                             Text("\(preset.title) без переключений")
                                 .font(.caption).foregroundStyle(.secondary)
@@ -364,6 +507,14 @@ private struct CalmFocusOverview: View {
                             .font(.system(.title, design: .rounded).weight(.bold))
                         Text(summary.observed == 0 ? "Назначьте роли приложениям, чтобы увидеть ритм дня." : "рабочего контекста за сегодня")
                             .font(.caption).foregroundStyle(.secondary)
+                        TextField(
+                            "Намерение на фокус-блок (необязательно)",
+                            text: Binding(
+                                get: { store.activeFocusIntent },
+                                set: { store.setFocusIntent($0) }
+                            )
+                        )
+                        .textFieldStyle(.roundedBorder)
                         HStack(spacing: 8) {
                             ForEach(FocusSessionPreset.allCases) { preset in
                                 Button(preset.title) { store.startFocusSession(preset) }

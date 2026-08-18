@@ -267,6 +267,65 @@ struct FocusDaySummary: Identifiable {
     var id: Date { date }
 }
 
+struct ProjectMomentum: Identifiable {
+    let id: UUID
+    let name: String
+    let colorHex: String
+    let goal: TimeInterval?
+    let completed: TimeInterval
+
+    var progress: Double {
+        guard let goal, goal > 0 else { return 0 }
+        return min(1, completed / goal)
+    }
+
+    var remaining: TimeInterval? {
+        guard let goal else { return nil }
+        return max(0, goal - completed)
+    }
+}
+
+enum FocusReflectionOutcome: String, Codable, CaseIterable, Identifiable {
+    case completed
+    case continueLater
+    case noDecision
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .completed: "Сделано"
+        case .continueLater: "Продолжу позже"
+        case .noDecision: "Без отметки"
+        }
+    }
+}
+
+struct FocusReflection: Identifiable, Codable, Equatable {
+    let id: UUID
+    let completedAt: Date
+    let projectIDs: [UUID]
+    let presetMinutes: Int
+    let intention: String
+    var outcome: FocusReflectionOutcome
+
+    init(
+        id: UUID = UUID(),
+        completedAt: Date,
+        projectIDs: [UUID],
+        presetMinutes: Int,
+        intention: String,
+        outcome: FocusReflectionOutcome = .completed
+    ) {
+        self.id = id
+        self.completedAt = completedAt
+        self.projectIDs = projectIDs
+        self.presetMinutes = presetMinutes
+        self.intention = intention
+        self.outcome = outcome
+    }
+}
+
 struct RecoveredSessionNotice: Identifiable {
     let sessionID: UUID
     let closedAt: Date

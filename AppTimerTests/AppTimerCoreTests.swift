@@ -12,7 +12,8 @@ class AppTimerModelTests: XCTestCase {
         "unassignedReminderEnabled", "unassignedReminderMinutes", "focusModeEnabled", "distractionAlertMinutes",
         "distractionReminderCooldownMinutes", "focusWorkBundleIdentifiers", "focusDistractingBundleIdentifiers",
         "focusApplicationNames", "recentProjectIDs", "activeSessionHeartbeatID", "activeSessionHeartbeatDate",
-        "passiveContextRecordingEnabled", "contextRetentionDays", "contextHeartbeatSegmentID", "contextHeartbeatDate"
+        "passiveContextRecordingEnabled", "contextRetentionDays", "contextHeartbeatSegmentID", "contextHeartbeatDate",
+        "activeFocusIntent", "activeFocusProjectIDs", "focusReflections", "closeTheDayNote"
     ]
 
     override func setUpWithError() throws {
@@ -601,6 +602,29 @@ final class AppTimerSettingsTests: XCTestCase {
         let restored = AppTimerSettings(defaults: defaults)
         XCTAssertTrue(restored.passiveContextRecordingEnabled)
         XCTAssertEqual(restored.contextRetention, .days7)
+    }
+
+    func testCalmMomentumSettingsPersistOnlyLocally() {
+        let settings = AppTimerSettings(defaults: defaults)
+        let projectID = UUID()
+        let reflection = FocusReflection(
+            completedAt: Date(timeIntervalSince1970: 1_234),
+            projectIDs: [projectID],
+            presetMinutes: 25,
+            intention: "Закончить прототип",
+            outcome: .continueLater
+        )
+
+        settings.activeFocusIntent = "Закончить прототип"
+        settings.activeFocusProjectIDs = [projectID]
+        settings.focusReflections = [reflection]
+        settings.closeTheDayNote = "Продолжить завтра"
+
+        let restored = AppTimerSettings(defaults: defaults)
+        XCTAssertEqual(restored.activeFocusIntent, "Закончить прототип")
+        XCTAssertEqual(restored.activeFocusProjectIDs, [projectID])
+        XCTAssertEqual(restored.focusReflections, [reflection])
+        XCTAssertEqual(restored.closeTheDayNote, "Продолжить завтра")
     }
 }
 
