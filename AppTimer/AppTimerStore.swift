@@ -16,10 +16,6 @@ final class AppTimerStore {
     var activeSession: WorkSession?
     var now = Date()
     var statusMessage = L10n.text("status.choose_project")
-    var activeFocusPreset: FocusSessionPreset?
-    var focusSessionStartedAt: Date?
-    var focusSessionEndsAt: Date?
-    var lastFocusSessionCompletedAt: Date?
     var recoveredSessionNotice: RecoveredSessionNotice?
     var storageErrorMessage: String?
 
@@ -27,19 +23,15 @@ final class AppTimerStore {
     @ObservationIgnored private var workspaceMonitor = WorkspaceMonitor()
     @ObservationIgnored private var idleMonitor = IdleMonitor()
     @ObservationIgnored private var notificationManager = LocalNotificationManager()
+    @ObservationIgnored private let sessionService = SessionService()
+    @ObservationIgnored private let focusService = FocusService()
+    @ObservationIgnored private let reminderService = ReminderService()
     @ObservationIgnored private var ticker: Timer?
     @ObservationIgnored private var activeSegment: AppSegment?
-    @ObservationIgnored private var unassignedActivityStartedAt: Date?
-    @ObservationIgnored private var lastUnassignedReminderAt: Date?
-    @ObservationIgnored private var distractingApplication: ActiveApplicationInfo?
-    @ObservationIgnored private var distractingApplicationStartedAt: Date?
-    @ObservationIgnored private var lastDistractionReminderAt: Date?
     @ObservationIgnored private var lastHeartbeatAt: Date?
     @ObservationIgnored private var terminationObserver: NSObjectProtocol?
     @ObservationIgnored private let logger = Logger(subsystem: "com.apptimer.app", category: "persistence")
     @ObservationIgnored private var isConfigured = false
-    private static let interruptionGraceInterval: TimeInterval = 120
-
     let settings: AppTimerSettings
 
     init(settings: AppTimerSettings = AppTimerSettings()) {
@@ -111,25 +103,20 @@ final class AppTimerStore {
 
     var isTracking: Bool { activeSession != nil }
 
-    var hasActiveFocusSession: Bool { activeFocusPreset != nil && focusSessionEndsAt != nil }
+    var activeFocusPreset: FocusSessionPreset? { focusService.activePreset }
+
+    var hasActiveFocusSession: Bool { focusService.hasActiveSession }
 
     var focusSessionRemaining: TimeInterval {
-        guard let focusSessionEndsAt else { return 0 }
-        return max(0, focusSessionEndsAt.timeIntervalSince(now))
+        focusService.remaining(at: now)
     }
 
     var focusSessionProgress: Double {
-        guard let preset = activeFocusPreset, let startedAt = focusSessionStartedAt else { return 0 }
-        let duration = TimeInterval(preset.minutes * 60)
-        return min(1, max(0, now.timeIntervalSince(startedAt) / duration))
+        focusService.progress(at: now)
     }
 
     var focusPulseState: FocusPulseState {
-        if distractingApplication != nil { return .distracted }
-        if hasActiveFocusSession { return .focused }
-        if let completedAt = lastFocusSessionCompletedAt,
-           now.timeIntervalSince(completedAt) < 20 { return .completed }
-        return isTracking ? .tracking : .resting
+        focusService.pulseState(isTracking: isTracking, at: now)
     }
 
     var elapsedText: String {
@@ -270,11 +257,8 @@ final class AppTimerStore {
     }
 
     func createProject(named name: String) {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let modelContext else { return }
-        let palette = ["397CFF", "8B5CF6", "10B981", "F59E0B", "EF4444", "06B6D4"]
-        let project = Project(name: trimmed, colorHex: palette[projects.count % palette.count])
-        modelContext.insert(project)
+        guard let modelContext,
+              let project = sessionService.createProject(named: name, existingCount: projects.count, in: modelContext) else { return }
         saveAndRefresh()
         selectedProjectIDs.insert(project.id)
     }
@@ -325,19 +309,14 @@ final class AppTimerStore {
         if !isTracking { startTracking() }
         guard isTracking else { return }
 
-        activeFocusPreset = preset
-        focusSessionStartedAt = now
-        focusSessionEndsAt = now.addingTimeInterval(TimeInterval(preset.minutes * 60))
-        lastFocusSessionCompletedAt = nil
+        focusService.start(preset, at: now)
         notificationManager.requestAuthorizationIfNeeded()
         statusMessage = L10n.format("status.focus", preset.title)
     }
 
     func cancelFocusSession() {
         guard hasActiveFocusSession else { return }
-        activeFocusPreset = nil
-        focusSessionStartedAt = nil
-        focusSessionEndsAt = nil
+        focusService.cancel()
         statusMessage = isTracking ? L10n.text("status.focus_cancelled_tracking") : L10n.text("status.focus_cancelled")
     }
 
@@ -349,14 +328,12 @@ final class AppTimerStore {
             return
         }
         rememberRecentProjects(currentProjects)
-        let session = WorkSession(allocationMode: selectedAllocationMode)
-        let weights = AllocationEngine.weights(for: currentProjects, mode: selectedAllocationMode, customWeights: customWeights)
-        modelContext.insert(session)
-        currentProjects.forEach { project in
-            let allocation = SessionProjectAllocation(project: project, session: session, weight: weights[project.id] ?? 0)
-            session.allocations.append(allocation)
-            modelContext.insert(allocation)
-        }
+        guard let session = sessionService.start(
+            projects: currentProjects,
+            allocationMode: selectedAllocationMode,
+            customWeights: customWeights,
+            in: modelContext
+        ) else { return }
         activeSession = session
         now = .now
         transition(to: workspaceMonitor.currentApplication)
@@ -399,14 +376,12 @@ final class AppTimerStore {
     func setUnassignedReminderEnabled(_ enabled: Bool) {
         settings.unassignedReminderEnabled = enabled
         if enabled { notificationManager.requestAuthorizationIfNeeded() }
-        unassignedActivityStartedAt = nil
-        lastUnassignedReminderAt = nil
+        reminderService.resetUnassignedReminder()
     }
 
     func setUnassignedReminderMinutes(_ minutes: Int) {
         settings.unassignedReminderMinutes = minutes
-        unassignedActivityStartedAt = nil
-        lastUnassignedReminderAt = nil
+        reminderService.resetUnassignedReminder()
     }
 
     func setFocusModeEnabled(_ enabled: Bool) {
@@ -498,7 +473,7 @@ final class AppTimerStore {
     private func closeActiveSession(at end: Date = .now) {
         guard let session = activeSession else { return }
         endActiveSegment(at: end)
-        session.endedAt = end
+        sessionService.close(session: session, activeSegment: nil, at: end)
         activeSession = nil
         resetDistractionState()
         cancelFocusSession()
@@ -513,17 +488,13 @@ final class AppTimerStore {
         endActiveSegment(at: end)
         updateDistractionState(for: application, at: end)
 
-        guard let application,
-              application.bundleIdentifier != Bundle.main.bundleIdentifier else { return }
-        let segment = AppSegment(
-            bundleIdentifier: application.bundleIdentifier,
-            appName: application.name,
-            session: session,
-            startedAt: end
+        guard let modelContext else { return }
+        activeSegment = sessionService.beginApplicationSegment(
+            for: session,
+            application: application,
+            at: end,
+            in: modelContext
         )
-        session.appSegments.append(segment)
-        modelContext?.insert(segment)
-        activeSegment = segment
         _ = save(context: "смена активного приложения")
     }
 
@@ -591,42 +562,13 @@ final class AppTimerStore {
     }
 
     private func recoverInterruptedSessionsIfNeeded() {
-        let currentTime = Date()
-        var didRecover = false
-
-        for session in sessions where session.endedAt == nil {
-            let lastActivity = trustedActivityDate(for: session, now: currentTime)
-            guard currentTime.timeIntervalSince(lastActivity) > Self.interruptionGraceInterval else { continue }
-
-            let recoveryDate = min(currentTime, max(session.startedAt, lastActivity))
-            session.appSegments
-                .filter { $0.endedAt == nil }
-                .forEach { $0.endedAt = max($0.startedAt, recoveryDate) }
-            session.endedAt = recoveryDate
-            clearHeartbeat(for: session.id)
-            didRecover = true
-
-            let projectNames = session.allocations.compactMap { $0.project?.name }.joined(separator: ", ")
-            recoveredSessionNotice = RecoveredSessionNotice(
-                sessionID: session.id,
-                closedAt: recoveryDate,
-                projectNames: projectNames.isEmpty ? L10n.text("status.no_project") : projectNames
-            )
-        }
-
-        guard didRecover else { return }
+        let notices = sessionService.recoverInterruptedSessions(sessions, heartbeat: activeSessionHeartbeat, now: Date())
+        notices.forEach { clearHeartbeat(for: $0.sessionID) }
+        guard !notices.isEmpty else { return }
+        recoveredSessionNotice = notices.last
         if save(context: "восстановление прерванной сессии") {
             refresh()
         }
-    }
-
-    private func trustedActivityDate(for session: WorkSession, now: Date) -> Date {
-        var candidates = [session.startedAt]
-        candidates.append(contentsOf: session.appSegments.map { $0.endedAt ?? $0.startedAt })
-        if let heartbeat = activeSessionHeartbeat, heartbeat.sessionID == session.id {
-            candidates.append(heartbeat.date)
-        }
-        return min(now, candidates.max() ?? session.startedAt)
     }
 
     private func pauseForInactivity() {
@@ -640,37 +582,27 @@ final class AppTimerStore {
     }
 
     private func updateDistractionState(for application: ActiveApplicationInfo?, at date: Date) {
-        guard focusModeEnabled,
-              isTracking,
-              let application,
-              application.bundleIdentifier != Bundle.main.bundleIdentifier,
-              focusRole(for: application.bundleIdentifier) == .distracting else {
-            resetDistractionState()
-            return
-        }
-
-        if distractingApplication?.bundleIdentifier != application.bundleIdentifier {
-            distractingApplication = application
-            distractingApplicationStartedAt = date
-            lastDistractionReminderAt = nil
-        }
+        focusService.updateDistraction(
+            application: application,
+            focusEnabled: focusModeEnabled,
+            isTracking: isTracking,
+            isDistracting: { self.focusRole(for: $0) == .distracting },
+            at: date
+        )
     }
 
     private func resetDistractionState() {
-        distractingApplication = nil
-        distractingApplicationStartedAt = nil
-        lastDistractionReminderAt = nil
+        focusService.resetDistraction()
     }
 
     private func checkDistractionReminder() {
         guard focusModeEnabled,
               isTracking,
-              let application = distractingApplication,
-              let startedAt = distractingApplicationStartedAt else { return }
-
-        let currentTime = Date()
-        guard currentTime.timeIntervalSince(startedAt) >= TimeInterval(distractionAlertMinutes * 60),
-              lastDistractionReminderAt == nil || currentTime.timeIntervalSince(lastDistractionReminderAt!) >= TimeInterval(distractionReminderCooldownMinutes * 60) else { return }
+              let application = focusService.shouldSendDistractionReminder(
+                after: distractionAlertMinutes,
+                cooldownMinutes: distractionReminderCooldownMinutes,
+                now: now
+              ) else { return }
 
         let projectNames = selectedProjects.map(\.name).joined(separator: ", ")
         notificationManager.post(
@@ -678,18 +610,10 @@ final class AppTimerStore {
             title: L10n.text("notification.distraction.title"),
             body: L10n.format("notification.distraction.body", application.name, distractionAlertMinutes, projectNames)
         )
-        lastDistractionReminderAt = currentTime
     }
 
     private func updateFocusSession() {
-        guard let preset = activeFocusPreset,
-              let endsAt = focusSessionEndsAt,
-              now >= endsAt else { return }
-
-        activeFocusPreset = nil
-        focusSessionStartedAt = nil
-        focusSessionEndsAt = nil
-        lastFocusSessionCompletedAt = now
+        guard let preset = focusService.completeIfNeeded(at: now) else { return }
         statusMessage = L10n.format("status.focus_completed", preset.title)
         notificationManager.post(
             identifier: "apptimer.focus-session-complete",
@@ -699,25 +623,19 @@ final class AppTimerStore {
     }
 
     private func checkUnassignedProjectReminder() {
-        guard unassignedReminderEnabled,
-              !isTracking,
-              selectedProjectIDs.isEmpty,
-              idleMonitor.secondsSinceUserInput < 90 else {
-            unassignedActivityStartedAt = nil
-            return
-        }
-
-        let currentTime = Date()
-        if unassignedActivityStartedAt == nil { unassignedActivityStartedAt = currentTime }
-        guard let startedAt = unassignedActivityStartedAt,
-              currentTime.timeIntervalSince(startedAt) >= TimeInterval(unassignedReminderMinutes * 60),
-              lastUnassignedReminderAt == nil || currentTime.timeIntervalSince(lastUnassignedReminderAt!) >= TimeInterval(unassignedReminderMinutes * 60) else { return }
+        guard reminderService.shouldSendUnassignedReminder(
+            enabled: unassignedReminderEnabled,
+            isTracking: isTracking,
+            hasSelectedProjects: !selectedProjectIDs.isEmpty,
+            secondsSinceUserInput: idleMonitor.secondsSinceUserInput,
+            thresholdMinutes: unassignedReminderMinutes,
+            now: now
+        ) else { return }
 
         notificationManager.post(
             identifier: "apptimer.project-reminder",
             title: L10n.text("notification.project.title"),
             body: L10n.text("notification.project.body")
         )
-        lastUnassignedReminderAt = currentTime
     }
 }
