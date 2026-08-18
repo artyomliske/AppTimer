@@ -225,6 +225,14 @@ struct FocusDaySummary: Identifiable {
     var id: Date { date }
 }
 
+struct RecoveredSessionNotice: Identifiable {
+    let sessionID: UUID
+    let closedAt: Date
+    let projectNames: String
+
+    var id: UUID { sessionID }
+}
+
 extension TimeInterval {
     var appTimerText: String {
         let hours = Int(self) / 3_600

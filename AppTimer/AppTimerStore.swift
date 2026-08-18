@@ -2,6 +2,7 @@
 import AppKit
 import Foundation
 import Observation
+import OSLog
 import SwiftData
 
 @MainActor
@@ -20,6 +21,8 @@ final class AppTimerStore {
     var focusSessionStartedAt: Date?
     var focusSessionEndsAt: Date?
     var lastFocusSessionCompletedAt: Date?
+    var recoveredSessionNotice: RecoveredSessionNotice?
+    var storageErrorMessage: String?
 
     @ObservationIgnored private var modelContext: ModelContext?
     @ObservationIgnored private var workspaceMonitor = WorkspaceMonitor()
@@ -32,7 +35,14 @@ final class AppTimerStore {
     @ObservationIgnored private var distractingApplication: ActiveApplicationInfo?
     @ObservationIgnored private var distractingApplicationStartedAt: Date?
     @ObservationIgnored private var lastDistractionReminderAt: Date?
+    @ObservationIgnored private var lastHeartbeatAt: Date?
+    @ObservationIgnored private var terminationObserver: NSObjectProtocol?
+    @ObservationIgnored private let logger = Logger(subsystem: "com.apptimer.app", category: "persistence")
     @ObservationIgnored private var isConfigured = false
+
+    private static let heartbeatSessionIDKey = "activeSessionHeartbeatID"
+    private static let heartbeatDateKey = "activeSessionHeartbeatDate"
+    private static let interruptionGraceInterval: TimeInterval = 120
 
     var defaultAllocationMode: AllocationMode {
         get { AllocationMode(rawValue: UserDefaults.standard.string(forKey: "defaultAllocationMode") ?? "equal") ?? .equal }
@@ -203,6 +213,8 @@ final class AppTimerStore {
         self.modelContext = modelContext
         isConfigured = true
         selectedAllocationMode = defaultAllocationMode
+        refresh()
+        recoverInterruptedSessionsIfNeeded()
         workspaceMonitor.onApplicationChange = { [weak self] application in
             self?.transition(to: application)
         }
@@ -211,6 +223,15 @@ final class AppTimerStore {
         }
         idleMonitor.onIdleThresholdReached = { [weak self] in
             self?.pauseForInactivity()
+        }
+        terminationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.closeActiveSession(at: .now)
+            }
         }
         if idlePauseEnabled || unassignedReminderEnabled || focusModeEnabled {
             notificationManager.requestAuthorizationIfNeeded()
@@ -225,9 +246,9 @@ final class AppTimerStore {
                 self?.checkUnassignedProjectReminder()
                 self?.checkDistractionReminder()
                 self?.updateFocusSession()
+                self?.updateHeartbeatIfNeeded()
             }
         }
-        refresh()
     }
 
     func refresh() {
@@ -237,6 +258,7 @@ final class AppTimerStore {
         projects = (try? modelContext.fetch(projectDescriptor)) ?? []
         sessions = (try? modelContext.fetch(sessionDescriptor)) ?? []
         activeSession = sessions.first(where: { $0.endedAt == nil })
+        activeSegment = activeSession?.appSegments.last(where: { $0.endedAt == nil })
 
         if let activeSession {
             selectedProjectIDs = Set(activeSession.allocations.compactMap { $0.project?.id })
@@ -340,6 +362,7 @@ final class AppTimerStore {
         now = .now
         transition(to: workspaceMonitor.currentApplication)
         saveAndRefresh()
+        writeHeartbeat(at: now)
         statusMessage = "Идёт учёт: \(elapsedText)"
     }
 
@@ -467,6 +490,10 @@ final class AppTimerStore {
         saveAndRefresh()
     }
 
+    func dismissRecoveredSessionNotice() {
+        recoveredSessionNotice = nil
+    }
+
     func toggleApplicationExclusion(_ bundleIdentifier: String) {
         var excluded = excludedBundleIdentifiers
         if excluded.contains(bundleIdentifier) { excluded.remove(bundleIdentifier) }
@@ -474,15 +501,16 @@ final class AppTimerStore {
         excludedBundleIdentifiers = excluded
     }
 
-    private func closeActiveSession() {
+    private func closeActiveSession(at end: Date = .now) {
         guard let session = activeSession else { return }
-        let end = Date()
         endActiveSegment(at: end)
         session.endedAt = end
         activeSession = nil
         resetDistractionState()
         cancelFocusSession()
-        saveAndRefresh()
+        if saveAndRefresh() {
+            clearHeartbeat(for: session.id)
+        }
     }
 
     private func transition(to application: ActiveApplicationInfo?) {
@@ -502,7 +530,7 @@ final class AppTimerStore {
         session.appSegments.append(segment)
         modelContext?.insert(segment)
         activeSegment = segment
-        try? modelContext?.save()
+        _ = save(context: "смена активного приложения")
     }
 
     private func endActiveSegment(at date: Date) {
@@ -510,9 +538,26 @@ final class AppTimerStore {
         activeSegment = nil
     }
 
-    private func saveAndRefresh() {
-        try? modelContext?.save()
+    @discardableResult
+    private func saveAndRefresh() -> Bool {
+        guard save(context: "сохранение данных") else { return false }
         refresh()
+        return true
+    }
+
+    @discardableResult
+    private func save(context: String) -> Bool {
+        guard let modelContext else { return false }
+        do {
+            try modelContext.save()
+            storageErrorMessage = nil
+            return true
+        } catch {
+            logger.error("Не удалось выполнить \(context, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            storageErrorMessage = "Не удалось сохранить локальные данные. Изменения останутся в памяти до повторной попытки."
+            statusMessage = "Ошибка сохранения локальных данных"
+            return false
+        }
     }
 
     private func updateIdleStatus() {
@@ -533,6 +578,74 @@ final class AppTimerStore {
     private var focusApplicationNames: [String: String] {
         get { UserDefaults.standard.dictionary(forKey: "focusApplicationNames") as? [String: String] ?? [:] }
         set { UserDefaults.standard.set(newValue, forKey: "focusApplicationNames") }
+    }
+
+    private var activeSessionHeartbeat: (sessionID: UUID, date: Date)? {
+        guard let rawID = UserDefaults.standard.string(forKey: Self.heartbeatSessionIDKey),
+              let sessionID = UUID(uuidString: rawID),
+              let date = UserDefaults.standard.object(forKey: Self.heartbeatDateKey) as? Date else {
+            return nil
+        }
+        return (sessionID, date)
+    }
+
+    private func updateHeartbeatIfNeeded() {
+        guard isTracking else { return }
+        guard lastHeartbeatAt == nil || now.timeIntervalSince(lastHeartbeatAt!) >= 30 else { return }
+        writeHeartbeat(at: now)
+    }
+
+    private func writeHeartbeat(at date: Date) {
+        guard let sessionID = activeSession?.id else { return }
+        UserDefaults.standard.set(sessionID.uuidString, forKey: Self.heartbeatSessionIDKey)
+        UserDefaults.standard.set(date, forKey: Self.heartbeatDateKey)
+        lastHeartbeatAt = date
+    }
+
+    private func clearHeartbeat(for sessionID: UUID) {
+        guard activeSessionHeartbeat?.sessionID == sessionID else { return }
+        UserDefaults.standard.removeObject(forKey: Self.heartbeatSessionIDKey)
+        UserDefaults.standard.removeObject(forKey: Self.heartbeatDateKey)
+        lastHeartbeatAt = nil
+    }
+
+    private func recoverInterruptedSessionsIfNeeded() {
+        let currentTime = Date()
+        var didRecover = false
+
+        for session in sessions where session.endedAt == nil {
+            let lastActivity = trustedActivityDate(for: session, now: currentTime)
+            guard currentTime.timeIntervalSince(lastActivity) > Self.interruptionGraceInterval else { continue }
+
+            let recoveryDate = min(currentTime, max(session.startedAt, lastActivity))
+            session.appSegments
+                .filter { $0.endedAt == nil }
+                .forEach { $0.endedAt = max($0.startedAt, recoveryDate) }
+            session.endedAt = recoveryDate
+            clearHeartbeat(for: session.id)
+            didRecover = true
+
+            let projectNames = session.allocations.compactMap { $0.project?.name }.joined(separator: ", ")
+            recoveredSessionNotice = RecoveredSessionNotice(
+                sessionID: session.id,
+                closedAt: recoveryDate,
+                projectNames: projectNames.isEmpty ? "Без проекта" : projectNames
+            )
+        }
+
+        guard didRecover else { return }
+        if save(context: "восстановление прерванной сессии") {
+            refresh()
+        }
+    }
+
+    private func trustedActivityDate(for session: WorkSession, now: Date) -> Date {
+        var candidates = [session.startedAt]
+        candidates.append(contentsOf: session.appSegments.map { $0.endedAt ?? $0.startedAt })
+        if let heartbeat = activeSessionHeartbeat, heartbeat.sessionID == session.id {
+            candidates.append(heartbeat.date)
+        }
+        return min(now, candidates.max() ?? session.startedAt)
     }
 
     private func pauseForInactivity() {

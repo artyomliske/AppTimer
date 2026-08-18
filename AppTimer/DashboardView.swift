@@ -35,6 +35,7 @@ private enum SidebarItem: Hashable {
 
 private struct TodayView: View {
     @Environment(AppTimerStore.self) private var store
+    @State private var editingRecoveredSession: WorkSession?
 
     var body: some View {
         ScrollView {
@@ -55,6 +56,36 @@ private struct TodayView: View {
                     MetricCard(title: "Фактическое время", value: store.todayActualDuration.appTimerText, detail: "все интервалы")
                     MetricCard(title: "Активный интервал", value: store.elapsedText, detail: store.isTracking ? "идёт учёт" : "учёт остановлен")
                     MetricCard(title: "Проекты", value: "\(store.selectedProjectIDs.count)", detail: "выбрано сейчас")
+                }
+
+                if let notice = store.recoveredSessionNotice {
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Учёт был прерван некорректно")
+                                .font(.headline)
+                            Text("Интервал для «\(notice.projectNames)» закрыт в \(notice.closedAt.formatted(date: .omitted, time: .shortened)), чтобы не записать лишнее время.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if let session = store.sessions.first(where: { $0.id == notice.sessionID }) {
+                            Button("Править") {
+                                editingRecoveredSession = session
+                                store.dismissRecoveredSessionNotice()
+                            }
+                            .buttonStyle(.bordered)
+                            Button("Удалить", role: .destructive) {
+                                store.deleteCompletedSession(session)
+                                store.dismissRecoveredSessionNotice()
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        Button("Скрыть") { store.dismissRecoveredSessionNotice() }
+                            .buttonStyle(.borderless)
+                    }
+                    .padding(14)
+                    .background(.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
                 }
 
                 CalmFocusOverview()
@@ -88,6 +119,7 @@ private struct TodayView: View {
             .padding(28)
         }
         .navigationTitle("Сегодня")
+        .sheet(item: $editingRecoveredSession) { SessionEditorSheet(session: $0) }
     }
 }
 

@@ -7,16 +7,22 @@ struct AppTimerApp: App {
     @State private var store: AppTimerStore
     @State private var dashboardController = DashboardPanelController()
     @State private var hotKeyManager: TrackingHotKeyManager
+    let sharedModelContainer: ModelContainer
 
     init() {
+        let modelContainer = Self.makeModelContainer()
         let store = AppTimerStore()
         let hotKeyManager = TrackingHotKeyManager()
         hotKeyManager.onPress = { store.startOrStopTracking() }
+        sharedModelContainer = modelContainer
         _store = State(initialValue: store)
         _hotKeyManager = State(initialValue: hotKeyManager)
+        Task { @MainActor in
+            store.configure(with: modelContainer.mainContext)
+        }
     }
 
-    var sharedModelContainer: ModelContainer = {
+    private static func makeModelContainer() -> ModelContainer {
         let schema = Schema([
             Project.self,
             WorkSession.self,
@@ -29,7 +35,7 @@ struct AppTimerApp: App {
         } catch {
             fatalError("Не удалось открыть локальное хранилище AppTimer: \(error)")
         }
-    }()
+    }
 
     var body: some Scene {
         MenuBarExtra("AppTimer", systemImage: store.focusPulseState.symbolName) {
@@ -44,12 +50,9 @@ struct AppTimerApp: App {
 }
 
 private struct MenuBarRootView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Environment(AppTimerStore.self) private var store
     let showDashboard: () -> Void
 
     var body: some View {
         MenuBarView(onShowDashboard: showDashboard)
-            .task { store.configure(with: modelContext) }
     }
 }
