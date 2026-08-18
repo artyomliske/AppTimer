@@ -11,6 +11,7 @@ struct DashboardView: View {
             List(selection: $selection) {
                 Section("AppTimer") {
                     Label("Сегодня", systemImage: "clock") .tag(SidebarItem.today)
+                    Label("Таймлайн", systemImage: "calendar.day.timeline.left") .tag(SidebarItem.timeline)
                     Label("Проекты", systemImage: "folder") .tag(SidebarItem.projects)
                     Label("Отчёты", systemImage: "chart.bar") .tag(SidebarItem.reports)
                 }
@@ -22,6 +23,7 @@ struct DashboardView: View {
         } detail: {
             switch selection ?? .today {
             case .today: TodayView()
+            case .timeline: TimelineView()
             case .projects: ProjectsView()
             case .reports: ReportsView()
             case .settings: SettingsView()
@@ -31,7 +33,7 @@ struct DashboardView: View {
 }
 
 private enum SidebarItem: Hashable {
-    case today, projects, reports, settings
+    case today, timeline, projects, reports, settings
 }
 
 @MainActor
