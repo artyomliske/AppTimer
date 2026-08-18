@@ -10,6 +10,7 @@ import SwiftData
 final class AppTimerStore {
     var projects: [Project] = []
     var sessions: [WorkSession] = []
+    var contextSegments: [ContextSegment] = []
     var selectedProjectIDs: Set<UUID> = []
     var selectedAllocationMode: AllocationMode = .equal
     var customWeights: [UUID: Double] = [:]
@@ -26,9 +27,11 @@ final class AppTimerStore {
     @ObservationIgnored private let sessionService = SessionService()
     @ObservationIgnored private let focusService = FocusService()
     @ObservationIgnored private let reminderService = ReminderService()
+    @ObservationIgnored private let contextRecorder = ContextRecorder()
     @ObservationIgnored private var ticker: Timer?
     @ObservationIgnored private var activeSegment: AppSegment?
     @ObservationIgnored private var lastHeartbeatAt: Date?
+    @ObservationIgnored private var lastContextCleanupAt: Date?
     @ObservationIgnored private var terminationObserver: NSObjectProtocol?
     @ObservationIgnored private let logger = Logger(subsystem: "com.apptimer.app", category: "persistence")
     @ObservationIgnored private var isConfigured = false
@@ -82,6 +85,14 @@ final class AppTimerStore {
 
     var distractingBundleIdentifiers: Set<String> {
         settings.distractingBundleIdentifiers
+    }
+
+    var passiveContextRecordingEnabled: Bool {
+        settings.passiveContextRecordingEnabled
+    }
+
+    var contextRetention: ContextHistoryRetention {
+        settings.contextRetention
     }
 
     private var recentProjectIDs: [UUID] {
@@ -193,7 +204,10 @@ final class AppTimerStore {
         selectedAllocationMode = defaultAllocationMode
         refresh()
         recoverInterruptedSessionsIfNeeded()
+        recoverPassiveContextIfNeeded()
+        purgeExpiredPassiveContextIfNeeded(force: true)
         workspaceMonitor.onApplicationChange = { [weak self] application in
+            self?.recordPassiveContext(application: application, at: .now)
             self?.transition(to: application)
         }
         workspaceMonitor.onSystemPause = { [weak self] in
@@ -209,6 +223,7 @@ final class AppTimerStore {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.closeActiveSession(at: .now)
+                self?.closePassiveContext(at: .now)
             }
         }
         if idlePauseEnabled || unassignedReminderEnabled || focusModeEnabled {
@@ -225,6 +240,8 @@ final class AppTimerStore {
                 self?.checkDistractionReminder()
                 self?.updateFocusSession()
                 self?.updateHeartbeatIfNeeded()
+                self?.updatePassiveContextHeartbeatIfNeeded()
+                self?.purgeExpiredPassiveContextIfNeeded()
             }
         }
     }
@@ -233,9 +250,11 @@ final class AppTimerStore {
         guard let modelContext else { return }
         let projectDescriptor = FetchDescriptor<Project>(sortBy: [SortDescriptor(\Project.name)])
         let sessionDescriptor = FetchDescriptor<WorkSession>(sortBy: [SortDescriptor(\WorkSession.startedAt, order: .reverse)])
+        let contextDescriptor = FetchDescriptor<ContextSegment>(sortBy: [SortDescriptor(\ContextSegment.startedAt, order: .reverse)])
         do {
             projects = try modelContext.fetch(projectDescriptor)
             sessions = try modelContext.fetch(sessionDescriptor)
+            contextSegments = try modelContext.fetch(contextDescriptor)
             storageErrorMessage = nil
         } catch {
             logger.error("Не удалось загрузить локальные данные: \(error.localizedDescription, privacy: .public)")
@@ -396,6 +415,28 @@ final class AppTimerStore {
 
     func setDistractionReminderCooldownMinutes(_ minutes: Int) {
         settings.distractionReminderCooldownMinutes = minutes
+    }
+
+    func setPassiveContextRecordingEnabled(_ enabled: Bool) {
+        guard settings.passiveContextRecordingEnabled != enabled else { return }
+        settings.passiveContextRecordingEnabled = enabled
+        if enabled {
+            recordPassiveContext(application: workspaceMonitor.currentApplication, at: .now)
+            purgeExpiredPassiveContextIfNeeded(force: true)
+        } else {
+            closePassiveContext(at: .now)
+        }
+    }
+
+    func setContextRetention(_ retention: ContextHistoryRetention) {
+        settings.contextRetention = retention
+        purgeExpiredPassiveContextIfNeeded(force: true)
+    }
+
+    func deletePassiveContextHistory() {
+        guard let modelContext,
+              contextRecorder.deleteAllSegments(contextSegments, settings: settings, in: modelContext, at: .now) else { return }
+        _ = saveAndRefresh()
     }
 
     func focusRole(for bundleIdentifier: String) -> FocusApplicationRole {
@@ -559,6 +600,48 @@ final class AppTimerStore {
     private func clearHeartbeat(for sessionID: UUID) {
         settings.clearHeartbeat(for: sessionID)
         lastHeartbeatAt = nil
+    }
+
+    private func recordPassiveContext(application: ActiveApplicationInfo?, at date: Date) {
+        guard let modelContext else { return }
+        let didChange = contextRecorder.record(
+            application: application,
+            enabled: passiveContextRecordingEnabled,
+            settings: settings,
+            context: modelContext,
+            at: date
+        )
+        if didChange { _ = saveAndRefresh() }
+    }
+
+    private func closePassiveContext(at date: Date) {
+        guard contextRecorder.close(settings: settings, at: date) else { return }
+        _ = saveAndRefresh()
+    }
+
+    private func recoverPassiveContextIfNeeded() {
+        guard contextRecorder.restoreOpenSegments(contextSegments, settings: settings, now: .now) else { return }
+        _ = saveAndRefresh()
+    }
+
+    private func updatePassiveContextHeartbeatIfNeeded() {
+        guard passiveContextRecordingEnabled else { return }
+        contextRecorder.updateHeartbeat(settings: settings, at: now)
+    }
+
+    private func purgeExpiredPassiveContextIfNeeded(force: Bool = false) {
+        guard let modelContext else { return }
+        if !force,
+           let lastContextCleanupAt,
+           now.timeIntervalSince(lastContextCleanupAt) < 3_600 { return }
+        lastContextCleanupAt = now
+        guard contextRecorder.purgeExpiredSegments(
+            contextSegments,
+            retention: contextRetention,
+            in: modelContext,
+            now: now
+        ) else { return }
+        _ = saveAndRefresh()
     }
 
     private func recoverInterruptedSessionsIfNeeded() {

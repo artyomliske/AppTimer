@@ -11,7 +11,8 @@ class AppTimerModelTests: XCTestCase {
         "defaultAllocationMode", "excludedBundleIdentifiers", "idlePauseEnabled", "idlePauseMinutes",
         "unassignedReminderEnabled", "unassignedReminderMinutes", "focusModeEnabled", "distractionAlertMinutes",
         "distractionReminderCooldownMinutes", "focusWorkBundleIdentifiers", "focusDistractingBundleIdentifiers",
-        "focusApplicationNames", "recentProjectIDs", "activeSessionHeartbeatID", "activeSessionHeartbeatDate"
+        "focusApplicationNames", "recentProjectIDs", "activeSessionHeartbeatID", "activeSessionHeartbeatDate",
+        "passiveContextRecordingEnabled", "contextRetentionDays", "contextHeartbeatSegmentID", "contextHeartbeatDate"
     ]
 
     override func setUpWithError() throws {
@@ -22,6 +23,7 @@ class AppTimerModelTests: XCTestCase {
             WorkSession.self,
             SessionProjectAllocation.self,
             AppSegment.self,
+            ContextSegment.self,
             configurations: configuration
         )
         modelContext = modelContainer.mainContext
@@ -561,6 +563,18 @@ final class AppTimerSettingsTests: XCTestCase {
         settings.clearHeartbeat(for: sessionID)
         XCTAssertNil(settings.heartbeat())
     }
+
+    func testPassiveContextSettingsArePrivateByDefaultAndPersist() {
+        let settings = AppTimerSettings(defaults: defaults)
+        XCTAssertFalse(settings.passiveContextRecordingEnabled)
+        XCTAssertEqual(settings.contextRetention, .days30)
+
+        settings.passiveContextRecordingEnabled = true
+        settings.contextRetention = .days7
+        let restored = AppTimerSettings(defaults: defaults)
+        XCTAssertTrue(restored.passiveContextRecordingEnabled)
+        XCTAssertEqual(restored.contextRetention, .days7)
+    }
 }
 
 final class SessionServiceTests: AppTimerModelTests {
@@ -584,6 +598,44 @@ final class SessionServiceTests: AppTimerModelTests {
         XCTAssertEqual(notices.map(\.sessionID), [oldSession.id])
         XCTAssertNotNil(oldSession.endedAt)
         XCTAssertNil(currentSession.endedAt)
+    }
+}
+
+final class ContextRecorderTests: AppTimerModelTests {
+    func testRecorderWritesOnlyWhenExplicitlyEnabledAndClosesOnApplicationChange() throws {
+        let recorder = ContextRecorder()
+        let settings = AppTimerSettings()
+        let start = Date(timeIntervalSince1970: 1_000)
+        let editor = ActiveApplicationInfo(bundleIdentifier: "com.example.editor", name: "Editor")
+        let chat = ActiveApplicationInfo(bundleIdentifier: "com.example.chat", name: "Chat")
+
+        XCTAssertFalse(recorder.record(application: editor, enabled: false, settings: settings, context: modelContext, at: start))
+        XCTAssertTrue(recorder.record(application: editor, enabled: true, settings: settings, context: modelContext, at: start))
+        XCTAssertTrue(recorder.record(application: chat, enabled: true, settings: settings, context: modelContext, at: start.addingTimeInterval(120)))
+
+        let segments = try modelContext.fetch(FetchDescriptor<ContextSegment>(sortBy: [SortDescriptor(\ContextSegment.startedAt)]))
+        XCTAssertEqual(segments.count, 2)
+        XCTAssertEqual(segments[0].bundleIdentifier, editor.bundleIdentifier)
+        XCTAssertEqual(segments[0].endedAt, start.addingTimeInterval(120))
+        XCTAssertEqual(segments[1].bundleIdentifier, chat.bundleIdentifier)
+        XCTAssertNil(segments[1].endedAt)
+    }
+
+    func testRecorderPurgesOnlyExpiredClosedSegments() throws {
+        let recorder = ContextRecorder()
+        let settings = AppTimerSettings()
+        let now = Date(timeIntervalSince1970: 100 * 86_400)
+        let old = ContextSegment(bundleIdentifier: "com.example.old", appName: "Old", startedAt: now.addingTimeInterval(-40 * 86_400))
+        old.endedAt = now.addingTimeInterval(-39 * 86_400)
+        let recent = ContextSegment(bundleIdentifier: "com.example.recent", appName: "Recent", startedAt: now.addingTimeInterval(-2 * 86_400))
+        recent.endedAt = now.addingTimeInterval(-1 * 86_400)
+        modelContext.insert(old)
+        modelContext.insert(recent)
+
+        XCTAssertTrue(recorder.purgeExpiredSegments([old, recent], retention: .days30, in: modelContext, now: now))
+        let remaining = try modelContext.fetch(FetchDescriptor<ContextSegment>())
+        XCTAssertEqual(remaining.map(\.bundleIdentifier), ["com.example.recent"])
+        _ = recorder.close(settings: settings, at: now)
     }
 }
 

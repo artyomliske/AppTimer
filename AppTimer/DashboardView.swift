@@ -457,6 +457,7 @@ private struct SettingsView: View {
     @State private var hotKey = TrackingHotKeyManager()
     @State private var newFocusApplicationName = ""
     @State private var newFocusBundleIdentifier = ""
+    @State private var confirmingPassiveHistoryDeletion = false
 
     var body: some View {
         Form {
@@ -530,6 +531,27 @@ private struct SettingsView: View {
                 Text("Проверка действует только во время ручного учёта. AppTimer показывает уведомление, но не блокирует приложения и не читает их содержимое.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section("Пассивная история приложений") {
+                Toggle("Записывать контекст приложений вне учёта", isOn: Binding(
+                    get: { store.passiveContextRecordingEnabled },
+                    set: { store.setPassiveContextRecordingEnabled($0) }
+                ))
+                Text("По умолчанию выключено. При включении AppTimer локально сохраняет только имя активного приложения и bundle identifier, даже когда ручной учёт остановлен.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if store.passiveContextRecordingEnabled {
+                    Picker("Срок хранения", selection: Binding(
+                        get: { store.contextRetention },
+                        set: { store.setContextRetention($0) }
+                    )) {
+                        ForEach(ContextHistoryRetention.allCases) { retention in
+                            Text(retention.title).tag(retention)
+                        }
+                    }
+                    Button("Удалить всю пассивную историю", role: .destructive) {
+                        confirmingPassiveHistoryDeletion = true
+                    }
+                }
+            }
             Section("Роли приложений") {
                 if store.focusApplications.isEmpty {
                     Text("Список пополнится приложениями из локального контекста учёта. Их также можно добавить вручную ниже.")
@@ -576,6 +598,17 @@ private struct SettingsView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Настройки")
+        .confirmationDialog(
+            "Удалить всю пассивную историю?",
+            isPresented: $confirmingPassiveHistoryDeletion,
+            titleVisibility: .visible
+        ) {
+            Button("Удалить историю", role: .destructive) {
+                store.deletePassiveContextHistory()
+            }
+        } message: {
+            Text("Будут удалены все локальные отрезки активных приложений. Ручные интервалы и проекты останутся без изменений.")
+        }
     }
 }
 

@@ -46,6 +46,12 @@ final class AppTimerSettings {
     var focusApplicationNames: [String: String] {
         didSet { defaults.set(focusApplicationNames, forKey: Key.focusApplicationNames) }
     }
+    var passiveContextRecordingEnabled: Bool {
+        didSet { defaults.set(passiveContextRecordingEnabled, forKey: Key.passiveContextRecordingEnabled) }
+    }
+    var contextRetention: ContextHistoryRetention {
+        didSet { defaults.set(contextRetention.rawValue, forKey: Key.contextRetentionDays) }
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -62,6 +68,8 @@ final class AppTimerSettings {
         distractingBundleIdentifiers = Set(defaults.stringArray(forKey: Key.distractingBundleIdentifiers) ?? [])
         recentProjectIDs = (defaults.stringArray(forKey: Key.recentProjectIDs) ?? []).compactMap(UUID.init(uuidString:))
         focusApplicationNames = defaults.dictionary(forKey: Key.focusApplicationNames) as? [String: String] ?? [:]
+        passiveContextRecordingEnabled = defaults.object(forKey: Key.passiveContextRecordingEnabled) as? Bool ?? false
+        contextRetention = ContextHistoryRetention(rawValue: defaults.object(forKey: Key.contextRetentionDays) as? Int ?? ContextHistoryRetention.days30.rawValue) ?? .days30
     }
 
     func writeHeartbeat(sessionID: UUID, at date: Date) {
@@ -82,6 +90,26 @@ final class AppTimerSettings {
         guard heartbeat()?.sessionID == sessionID else { return }
         defaults.removeObject(forKey: Key.heartbeatSessionID)
         defaults.removeObject(forKey: Key.heartbeatDate)
+    }
+
+    func writeContextHeartbeat(segmentID: UUID, at date: Date) {
+        defaults.set(segmentID.uuidString, forKey: Key.contextHeartbeatSegmentID)
+        defaults.set(date, forKey: Key.contextHeartbeatDate)
+    }
+
+    func contextHeartbeat() -> (segmentID: UUID, date: Date)? {
+        guard let rawID = defaults.string(forKey: Key.contextHeartbeatSegmentID),
+              let segmentID = UUID(uuidString: rawID),
+              let date = defaults.object(forKey: Key.contextHeartbeatDate) as? Date else {
+            return nil
+        }
+        return (segmentID, date)
+    }
+
+    func clearContextHeartbeat(for segmentID: UUID? = nil) {
+        if let segmentID, contextHeartbeat()?.segmentID != segmentID { return }
+        defaults.removeObject(forKey: Key.contextHeartbeatSegmentID)
+        defaults.removeObject(forKey: Key.contextHeartbeatDate)
     }
 
     private func persistMinimum(_ value: Int, key: String, assign: (Int) -> Void) {
@@ -111,5 +139,9 @@ final class AppTimerSettings {
         static let focusApplicationNames = "focusApplicationNames"
         static let heartbeatSessionID = "activeSessionHeartbeatID"
         static let heartbeatDate = "activeSessionHeartbeatDate"
+        static let passiveContextRecordingEnabled = "passiveContextRecordingEnabled"
+        static let contextRetentionDays = "contextRetentionDays"
+        static let contextHeartbeatSegmentID = "contextHeartbeatSegmentID"
+        static let contextHeartbeatDate = "contextHeartbeatDate"
     }
 }

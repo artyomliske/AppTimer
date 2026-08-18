@@ -96,6 +96,25 @@ enum FocusPulseState: String {
     }
 }
 
+enum ContextHistoryRetention: Int, CaseIterable, Identifiable {
+    case days7 = 7
+    case days30 = 30
+    case days90 = 90
+    case forever = 0
+
+    var id: Int { rawValue }
+    var days: Int? { self == .forever ? nil : rawValue }
+
+    var title: String {
+        switch self {
+        case .days7: "7 дней"
+        case .days30: "30 дней"
+        case .days90: "90 дней"
+        case .forever: "Бессрочно"
+        }
+    }
+}
+
 @Model
 final class Project {
     @Attribute(.unique) var id: UUID
@@ -189,6 +208,28 @@ final class AppSegment {
 
 // Passive local application context. It intentionally has no relationship to WorkSession:
 // manual sessions are an optional annotation layer over this continuous timeline.
+@Model
+final class ContextSegment {
+    @Attribute(.unique) var id: UUID
+    var bundleIdentifier: String
+    var appName: String
+    var startedAt: Date
+    var endedAt: Date?
+
+    init(bundleIdentifier: String, appName: String, startedAt: Date = .now) {
+        self.id = UUID()
+        self.bundleIdentifier = bundleIdentifier
+        self.appName = appName
+        self.startedAt = startedAt
+        self.endedAt = nil
+    }
+
+    func duration(until now: Date = .now) -> TimeInterval {
+        (endedAt ?? now).timeIntervalSince(startedAt)
+    }
+}
+
+// Passive local application context. Manual sessions remain an optional annotation layer over this timeline.
 @Model
 final class ContextSegment {
     @Attribute(.unique) var id: UUID
