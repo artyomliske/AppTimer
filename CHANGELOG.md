@@ -2,6 +2,12 @@
 
 All notable changes to AppTimer are documented here. The project follows semantic versioning: patch releases protect correctness, minor releases add compatible capabilities, and major releases may alter data or workflow concepts.
 
+## 2.0.1 — SwiftData launch fix
+
+### Fixed
+
+- Removed a duplicate physical model checksum from the staged SwiftData migration plan. Existing V1/V2 local stores now migrate directly and lightweightly to V3 instead of causing an early app termination before the Menu Bar item appears.
+
 ## 2.0.0 — Private Timeline and retro annotations
 
 ### Added

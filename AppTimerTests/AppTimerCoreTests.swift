@@ -746,10 +746,9 @@ final class FocusAndReminderServiceTests: XCTestCase {
 }
 
 final class AppTimerSchemaTests: XCTestCase {
-    func testMigrationPlanKeepsThreeExplicitSchemaVersions() {
-        XCTAssertEqual(AppTimerSchemaMigrationPlan.schemas.count, 3)
+    func testMigrationPlanUsesDistinctPhysicalSchemaVersions() {
+        XCTAssertEqual(AppTimerSchemaMigrationPlan.schemas.count, 2)
         XCTAssertEqual(AppTimerSchemaV1.versionIdentifier, Schema.Version(1, 0, 0))
-        XCTAssertEqual(AppTimerSchemaV2.versionIdentifier, Schema.Version(2, 0, 0))
         XCTAssertEqual(AppTimerSchemaV3.versionIdentifier, Schema.Version(3, 0, 0))
     }
 }

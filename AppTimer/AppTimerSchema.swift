@@ -9,16 +9,6 @@ enum AppTimerSchemaV1: VersionedSchema {
     }
 }
 
-enum AppTimerSchemaV2: VersionedSchema {
-    static var versionIdentifier: Schema.Version { Schema.Version(2, 0, 0) }
-
-    // V2 intentionally has the same persisted shape as V1. It establishes an explicit migration boundary
-    // before the Timeline phase adds new model types or fields.
-    static var models: [any PersistentModel.Type] {
-        [Project.self, WorkSession.self, SessionProjectAllocation.self, AppSegment.self]
-    }
-}
-
 enum AppTimerSchemaV3: VersionedSchema {
     static var versionIdentifier: Schema.Version { Schema.Version(3, 0, 0) }
 
@@ -30,13 +20,15 @@ enum AppTimerSchemaV3: VersionedSchema {
 
 enum AppTimerSchemaMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [AppTimerSchemaV1.self, AppTimerSchemaV2.self, AppTimerSchemaV3.self]
+        // Each migration-plan entry must have a distinct model checksum. V2 had the same
+        // physical model shape as V1, so keeping both made Core Data abort before migration.
+        // Existing V1/V2 stores share that legacy checksum and migrate directly to V3.
+        [AppTimerSchemaV1.self, AppTimerSchemaV3.self]
     }
 
     static var stages: [MigrationStage] {
         [
-            .lightweight(fromVersion: AppTimerSchemaV1.self, toVersion: AppTimerSchemaV2.self),
-            .lightweight(fromVersion: AppTimerSchemaV2.self, toVersion: AppTimerSchemaV3.self)
+            .lightweight(fromVersion: AppTimerSchemaV1.self, toVersion: AppTimerSchemaV3.self)
         ]
     }
 }
