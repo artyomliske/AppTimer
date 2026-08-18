@@ -24,6 +24,15 @@
 
 Download the current Apple Silicon installer from [GitHub Releases](https://github.com/artyomliske/AppTimer/releases). Open the DMG and drag `AppTimer` onto the `Applications` shortcut.
 
+### Homebrew
+
+For Apple Silicon Macs, install the current published release through the public tap:
+
+```bash
+brew tap artyomliske/tap
+brew install --cask apptimer
+```
+
 ### Build locally
 
 Requirements: macOS 14+, Xcode with SwiftData support, and Command Line Tools.
@@ -39,6 +48,18 @@ make install
 ### About Gatekeeper
 
 Release DMGs are ad-hoc signed but are not Apple-notarized because the project does not currently use a paid Apple Developer account. For a downloaded release, use Finder’s **Control-click → Open → Open** once. If you prefer not to bypass Gatekeeper, build locally with `make install` and inspect the public source code and CI workflow first.
+
+## Visual tour
+
+The previews below illustrate the three primary AppTimer contexts with synthetic local project data only: a compact Menu Bar workflow, the Today focus view, and weekly reports. They do not depict or transmit personal activity data.
+
+![AppTimer visual tour](Docs/media/apptimer-overview.gif)
+
+![AppTimer Menu Bar workflow](Docs/media/menu-bar-preview.png)
+
+![AppTimer Today focus view](Docs/media/today-focus-preview.png)
+
+![AppTimer weekly focus report](Docs/media/weekly-focus-preview.png)
 
 ## Features
 
@@ -66,7 +87,7 @@ make dmg      # create a drag-and-drop installer DMG and SHA-256 file
 make clean    # remove local build output
 ```
 
-The shared XCTest target covers allocation contracts and report calculations, including midnight clipping, open sessions, application exclusions, and focus classifications. GitHub Actions runs the test suite for every push and pull request. A version tag triggers a release workflow that tests, builds a DMG, writes a SHA-256 file, and attaches build provenance.
+The shared XCTest target contains 41 fast, in-memory scenarios covering allocation contracts, report calculations, local store lifecycle, recovery of stale sessions, application exclusions, and focus classifications. GitHub Actions runs the test suite for every push and pull request. A version tag triggers a release workflow that tests, builds a DMG, writes a SHA-256 file, and attaches build provenance.
 
 ## Project map
 
