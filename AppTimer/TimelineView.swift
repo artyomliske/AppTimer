@@ -123,7 +123,7 @@ struct TimelineView: View {
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 7) {
-                Text("Таймлайн").font(.largeTitle.bold())
+                Text("Таймлайн").font(.system(size: 34, weight: .bold, design: .rounded))
                 Text("Локальная лента приложений и ручной разметки за день.").foregroundStyle(.secondary)
             }
             Spacer()
@@ -166,7 +166,7 @@ private struct TimelineCanvas: View {
             let width = proxy.size.width
             ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(.quaternary.opacity(0.45))
+                    .fill(.regularMaterial)
 
                 ForEach(Array(stride(from: 0, through: 24, by: 3)), id: \.self) { hour in
                     let x = width * CGFloat(hour) / 24
@@ -239,6 +239,11 @@ private struct TimelineCanvas: View {
                 .help("\(label): \(TimelineGeometry.duration(start: start, end: end, in: dayInterval).appTimerText)")
         }
     }
+}
+
+private enum TimelineVisual {
+    static let blue = Color(red: 0.13, green: 0.42, blue: 0.95)
+    static let canvas = Color.primary.opacity(0.025)
 }
 
 private enum TimelineGeometry {
