@@ -34,8 +34,8 @@ final class AppTimerStore {
     @ObservationIgnored private var isConfigured = false
     let settings: AppTimerSettings
 
-    init(settings: AppTimerSettings = AppTimerSettings()) {
-        self.settings = settings
+    init(settings: AppTimerSettings? = nil) {
+        self.settings = settings ?? AppTimerSettings()
     }
 
     var defaultAllocationMode: AllocationMode {
