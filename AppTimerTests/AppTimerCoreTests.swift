@@ -390,50 +390,69 @@ final class AppTimerStoreTests: AppTimerModelTests {
         let store = makeStore()
         store.createProject(named: "A")
         store.createProject(named: "B")
-        let second = try! XCTUnwrap(store.projects.first { $0.name == "B" })
+        guard let second = store.projects.first(where: { $0.name == "B" }) else {
+            return XCTFail("Second project should be available")
+        }
         store.toggleProject(second)
         store.startTracking()
-        let firstSessionID = try! XCTUnwrap(store.activeSession?.id)
+        guard let firstSession = store.activeSession else {
+            return XCTFail("Tracking session should start")
+        }
 
         store.toggleProject(second)
 
+        guard let restartedSession = store.activeSession else {
+            return XCTFail("Tracking should restart")
+        }
         XCTAssertTrue(store.isTracking)
-        XCTAssertNotEqual(store.activeSession?.id, firstSessionID)
+        XCTAssertNotEqual(restartedSession.id, firstSession.id)
         XCTAssertEqual(store.sessions.count, 2)
-        XCTAssertNotNil(store.sessions.first { $0.id == firstSessionID }?.endedAt)
+        XCTAssertNotNil(store.sessions.first(where: { $0.id == firstSession.id })?.endedAt)
     }
 
     func testChangingAllocationModeDuringTrackingRestartsSession() {
         let store = makeStore()
         store.createProject(named: "A")
         store.startTracking()
-        let firstSessionID = try! XCTUnwrap(store.activeSession?.id)
+        guard let firstSession = store.activeSession else {
+            return XCTFail("Tracking session should start")
+        }
 
-        store.changeAllocationMode(to: .fullToEach)
+        store.changeAllocationMode(to: AllocationMode.fullToEach)
 
-        XCTAssertEqual(store.activeSession?.allocationMode, .fullToEach)
-        XCTAssertNotEqual(store.activeSession?.id, firstSessionID)
+        guard let restartedSession = store.activeSession else {
+            return XCTFail("Tracking should restart")
+        }
+        XCTAssertEqual(restartedSession.allocationMode.rawValue, AllocationMode.fullToEach.rawValue)
+        XCTAssertNotEqual(restartedSession.id, firstSession.id)
         XCTAssertEqual(store.sessions.count, 2)
     }
 
     func testUpdatingCustomWeightDuringTrackingRestartsSession() {
         let store = makeStore()
         store.createProject(named: "A")
-        let project = try! XCTUnwrap(store.projects.first)
-        store.changeAllocationMode(to: .customWeights)
+        guard let project = store.projects.first else {
+            return XCTFail("Project should be available")
+        }
+        store.changeAllocationMode(to: AllocationMode.customWeights)
         store.startTracking()
-        let firstSessionID = try! XCTUnwrap(store.activeSession?.id)
+        guard let firstSession = store.activeSession else {
+            return XCTFail("Tracking session should start")
+        }
 
         store.updateCustomWeight(for: project, percent: 25)
 
-        XCTAssertNotEqual(store.activeSession?.id, firstSessionID)
+        guard let restartedSession = store.activeSession else {
+            return XCTFail("Tracking should restart")
+        }
+        XCTAssertNotEqual(restartedSession.id, firstSession.id)
         XCTAssertEqual(store.sessions.count, 2)
-        XCTAssertEqual(store.activeSession?.allocationMode, .customWeights)
+        XCTAssertEqual(restartedSession.allocationMode.rawValue, AllocationMode.customWeights.rawValue)
     }
 
     func testFocusSessionRequiresAProject() {
         let store = makeStore()
-        store.startFocusSession(.short)
+        store.startFocusSession(FocusSessionPreset.short)
 
         XCTAssertFalse(store.hasActiveFocusSession)
         XCTAssertEqual(store.statusMessage, "Выберите проект для фокус-сессии")
@@ -442,17 +461,19 @@ final class AppTimerStoreTests: AppTimerModelTests {
     func testFocusSessionStartsTrackingForSelectedProject() {
         let store = makeStore()
         store.createProject(named: "A")
-        store.startFocusSession(.short)
+        store.startFocusSession(FocusSessionPreset.short)
 
         XCTAssertTrue(store.isTracking)
-        XCTAssertEqual(store.activeFocusPreset, .short)
+        XCTAssertEqual(store.activeFocusPreset?.rawValue, FocusSessionPreset.short.rawValue)
         XCTAssertEqual(store.focusSessionEndsAt?.timeIntervalSince(store.focusSessionStartedAt ?? .distantPast), 1_500)
     }
 
     func testArchivingAProjectClearsItsSelection() {
         let store = makeStore()
         store.createProject(named: "A")
-        let project = try! XCTUnwrap(store.projects.first)
+        guard let project = store.projects.first else {
+            return XCTFail("Project should be available")
+        }
         store.archive(project)
 
         XCTAssertTrue(project.isArchived)
@@ -461,11 +482,11 @@ final class AppTimerStoreTests: AppTimerModelTests {
 
     func testFocusRoleRoundTripUsesLocalSettings() {
         let store = makeStore()
-        store.setFocusRole(.work, for: "com.example.editor", name: "Editor")
-        XCTAssertEqual(store.focusRole(for: "com.example.editor"), .work)
+        store.setFocusRole(FocusApplicationRole.work, for: "com.example.editor", name: "Editor")
+        XCTAssertEqual(store.focusRole(for: "com.example.editor").rawValue, FocusApplicationRole.work.rawValue)
 
-        store.setFocusRole(.neutral, for: "com.example.editor")
-        XCTAssertEqual(store.focusRole(for: "com.example.editor"), .neutral)
+        store.setFocusRole(FocusApplicationRole.neutral, for: "com.example.editor")
+        XCTAssertEqual(store.focusRole(for: "com.example.editor").rawValue, FocusApplicationRole.neutral.rawValue)
     }
 
     func testConfigureRecoversStaleOpenSession() {
