@@ -2,6 +2,18 @@
 
 All notable changes to AppTimer are documented here. The project follows semantic versioning: patch releases protect correctness, minor releases add compatible capabilities, and major releases may alter data or workflow concepts.
 
+## 2.1.0 — Focus-first native interface
+
+### Changed
+
+- Rebuilt the native Dashboard around a focus-first visual hierarchy: a large ring metric, daily summary, project cards, local application context and calmer surface treatment.
+- Redesigned the Menu Bar popover with a prominent Focus Pulse, concise live time, grouped local projects, focus controls and a clear primary tracking action.
+- Aligned Timeline, Projects, Reports and Settings with the light native visual system, rounded surfaces and the shared blue focus accent.
+
+### Verified
+
+- Confirmed XCTest, Release build and the redesigned AppTimer bundle on macOS 26 / Apple Silicon.
+
 ## 2.0.1 — SwiftData launch fix
 
 ### Fixed
