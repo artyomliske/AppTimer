@@ -24,15 +24,14 @@ struct AppTimerApp: App {
     }
 
     private static func makeModelContainer() -> ModelContainer {
-        let schema = Schema([
-            Project.self,
-            WorkSession.self,
-            SessionProjectAllocation.self,
-            AppSegment.self
-        ])
+        let schema = AppTimerSchema.current
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {
-            return try ModelContainer(for: schema, configurations: [configuration])
+            return try ModelContainer(
+                for: schema,
+                migrationPlan: AppTimerSchemaMigrationPlan.self,
+                configurations: [configuration]
+            )
         } catch {
             fatalError("Не удалось открыть локальное хранилище AppTimer: \(error)")
         }
