@@ -515,3 +515,115 @@ final class ModelUtilityTests: AppTimerModelTests {
         XCTAssertEqual(L10n.text("status.choose_project", languageCode: "en"), "Choose a project to start tracking")
     }
 }
+
+@MainActor
+final class AppTimerSettingsTests: XCTestCase {
+    private var defaults: UserDefaults!
+
+    override func setUpWithError() throws {
+        let suite = "AppTimerSettingsTests.\(UUID().uuidString)"
+        defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+    }
+
+    override func tearDownWithError() throws {
+        defaults.removePersistentDomain(forName: defaults.volatileDomainNames.first ?? "")
+        defaults = nil
+    }
+
+    func testSettingsPreserveExistingAllocationModeKey() {
+        defaults.set(AllocationMode.fullToEach.rawValue, forKey: "defaultAllocationMode")
+        XCTAssertEqual(AppTimerSettings(defaults: defaults).defaultAllocationMode, .fullToEach)
+    }
+
+    func testSettingsSanitizeMinuteValuesAndPersistThem() {
+        let settings = AppTimerSettings(defaults: defaults)
+        settings.idlePauseMinutes = 0
+        settings.distractionAlertMinutes = -3
+
+        XCTAssertEqual(settings.idlePauseMinutes, 1)
+        XCTAssertEqual(settings.distractionAlertMinutes, 1)
+        XCTAssertEqual(defaults.object(forKey: "idlePauseMinutes") as? Int, 1)
+        XCTAssertEqual(defaults.object(forKey: "distractionAlertMinutes") as? Int, 1)
+    }
+
+    func testSettingsRoundTripFocusRolesAndHeartbeat() {
+        let settings = AppTimerSettings(defaults: defaults)
+        settings.workBundleIdentifiers = ["com.example.editor"]
+        settings.distractingBundleIdentifiers = ["com.example.chat"]
+        let sessionID = UUID()
+        let heartbeatDate = Date(timeIntervalSince1970: 1_000)
+        settings.writeHeartbeat(sessionID: sessionID, at: heartbeatDate)
+
+        XCTAssertEqual(AppTimerSettings(defaults: defaults).workBundleIdentifiers, ["com.example.editor"])
+        XCTAssertEqual(AppTimerSettings(defaults: defaults).distractingBundleIdentifiers, ["com.example.chat"])
+        XCTAssertEqual(AppTimerSettings(defaults: defaults).heartbeat()?.sessionID, sessionID)
+        settings.clearHeartbeat(for: sessionID)
+        XCTAssertNil(settings.heartbeat())
+    }
+}
+
+final class SessionServiceTests: AppTimerModelTests {
+    func testSessionServiceCreatesAllocationsAndClosesSession() {
+        let project = makeProject(named: "Project")
+        let service = SessionService()
+        let session = service.start(projects: [project], allocationMode: .equal, customWeights: [:], in: modelContext)
+        let closedAt = Date(timeIntervalSince1970: 2_000)
+
+        XCTAssertEqual(session?.allocations.count, 1)
+        service.close(session: try! XCTUnwrap(session), activeSegment: nil, at: closedAt)
+        XCTAssertEqual(session?.endedAt, closedAt)
+    }
+
+    func testSessionServiceRecoversOnlyStaleOpenSession() {
+        let oldSession = makeSession(start: Date(timeIntervalSince1970: 0), end: nil)
+        let currentSession = makeSession(start: Date(timeIntervalSince1970: 990), end: nil)
+        let notices = SessionService().recoverInterruptedSessions([oldSession, currentSession], heartbeat: nil, now: Date(timeIntervalSince1970: 1_000))
+
+        XCTAssertEqual(notices.map(\.sessionID), [oldSession.id])
+        XCTAssertNotNil(oldSession.endedAt)
+        XCTAssertNil(currentSession.endedAt)
+    }
+}
+
+@MainActor
+final class FocusAndReminderServiceTests: XCTestCase {
+    func testFocusServiceTransitionsFromFocusedToCompleted() {
+        let service = FocusService()
+        let start = Date(timeIntervalSince1970: 1_000)
+        service.start(.short, at: start)
+
+        XCTAssertEqual(service.remaining(at: start), 1_500)
+        XCTAssertEqual(service.pulseState(isTracking: true, at: start), .focused)
+        XCTAssertEqual(service.completeIfNeeded(at: start.addingTimeInterval(1_500)), .short)
+        XCTAssertEqual(service.pulseState(isTracking: false, at: start.addingTimeInterval(1_501)), .completed)
+    }
+
+    func testFocusServiceHonorsDistractionCooldown() {
+        let service = FocusService()
+        let start = Date(timeIntervalSince1970: 1_000)
+        let application = ActiveApplicationInfo(bundleIdentifier: "com.example.chat", name: "Chat")
+        service.updateDistraction(application: application, focusEnabled: true, isTracking: true, isDistracting: { $0 == application.bundleIdentifier }, at: start)
+
+        XCTAssertNil(service.shouldSendDistractionReminder(after: 5, cooldownMinutes: 15, now: start.addingTimeInterval(299)))
+        XCTAssertEqual(service.shouldSendDistractionReminder(after: 5, cooldownMinutes: 15, now: start.addingTimeInterval(300)), application)
+        XCTAssertNil(service.shouldSendDistractionReminder(after: 5, cooldownMinutes: 15, now: start.addingTimeInterval(301)))
+    }
+
+    func testReminderServiceRequiresSustainedUnassignedActivity() {
+        let service = ReminderService()
+        let start = Date(timeIntervalSince1970: 1_000)
+
+        XCTAssertFalse(service.shouldSendUnassignedReminder(enabled: true, isTracking: false, hasSelectedProjects: false, secondsSinceUserInput: 5, thresholdMinutes: 15, now: start))
+        XCTAssertTrue(service.shouldSendUnassignedReminder(enabled: true, isTracking: false, hasSelectedProjects: false, secondsSinceUserInput: 5, thresholdMinutes: 15, now: start.addingTimeInterval(900)))
+        XCTAssertFalse(service.shouldSendUnassignedReminder(enabled: true, isTracking: false, hasSelectedProjects: false, secondsSinceUserInput: 5, thresholdMinutes: 15, now: start.addingTimeInterval(901)))
+    }
+}
+
+final class AppTimerSchemaTests: XCTestCase {
+    func testMigrationPlanKeepsTwoExplicitSchemaVersions() {
+        XCTAssertEqual(AppTimerSchemaMigrationPlan.schemas.count, 2)
+        XCTAssertEqual(AppTimerSchemaV1.versionIdentifier, Schema.Version(1, 0, 0))
+        XCTAssertEqual(AppTimerSchemaV2.versionIdentifier, Schema.Version(2, 0, 0))
+    }
+}
