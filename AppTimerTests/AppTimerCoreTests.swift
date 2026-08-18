@@ -1,13 +1,57 @@
 import Foundation
+import SwiftData
 import XCTest
 
-final class AllocationEngineTests: XCTestCase {
+@MainActor
+private class AppTimerModelTests: XCTestCase {
+    private var modelContainer: ModelContainer!
+    private var modelContext: ModelContext!
+
+    override func setUpWithError() throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        modelContainer = try ModelContainer(
+            for: Project.self,
+            WorkSession.self,
+            SessionProjectAllocation.self,
+            AppSegment.self,
+            configurations: configuration
+        )
+        modelContext = modelContainer.mainContext
+    }
+
+    override func tearDownWithError() throws {
+        modelContext = nil
+        modelContainer = nil
+    }
+
+    func makeProject(named name: String) -> Project {
+        let project = Project(name: name)
+        modelContext.insert(project)
+        return project
+    }
+
+    func makeSession(start: Date, end: Date?) -> WorkSession {
+        let session = WorkSession(startedAt: start, allocationMode: .equal)
+        session.endedAt = end
+        modelContext.insert(session)
+        return session
+    }
+
+    func makeSegment(bundleIdentifier: String, appName: String, session: WorkSession, startedAt: Date, endedAt: Date?) -> AppSegment {
+        let segment = AppSegment(bundleIdentifier: bundleIdentifier, appName: appName, session: session, startedAt: startedAt)
+        segment.endedAt = endedAt
+        modelContext.insert(segment)
+        return segment
+    }
+}
+
+final class AllocationEngineTests: AppTimerModelTests {
     func testEmptyProjectsProduceNoWeights() {
         XCTAssertEqual(AllocationEngine.weights(for: [], mode: .equal, customWeights: [:]), [:])
     }
 
     func testEqualAllocationSplitsWeightEvenly() {
-        let projects = [Project(name: "A"), Project(name: "B"), Project(name: "C")]
+        let projects = [makeProject(named: "A"), makeProject(named: "B"), makeProject(named: "C")]
         let weights = AllocationEngine.weights(for: projects, mode: .equal, customWeights: [:])
 
         XCTAssertEqual(weights.values.reduce(0, +), 1, accuracy: 0.000_001)
@@ -15,7 +59,7 @@ final class AllocationEngineTests: XCTestCase {
     }
 
     func testFullToEachGivesEveryProjectFullWeight() {
-        let projects = [Project(name: "A"), Project(name: "B")]
+        let projects = [makeProject(named: "A"), makeProject(named: "B")]
         let weights = AllocationEngine.weights(for: projects, mode: .fullToEach, customWeights: [:])
 
         XCTAssertEqual(weights[projects[0].id], 1)
@@ -24,7 +68,7 @@ final class AllocationEngineTests: XCTestCase {
     }
 
     func testCustomWeightsNormalizeToOne() {
-        let projects = [Project(name: "A"), Project(name: "B")]
+        let projects = [makeProject(named: "A"), makeProject(named: "B")]
         let weights = AllocationEngine.weights(
             for: projects,
             mode: .customWeights,
@@ -36,7 +80,7 @@ final class AllocationEngineTests: XCTestCase {
     }
 
     func testZeroCustomWeightsFallBackToEqualAllocation() {
-        let projects = [Project(name: "A"), Project(name: "B")]
+        let projects = [makeProject(named: "A"), makeProject(named: "B")]
         let weights = AllocationEngine.weights(
             for: projects,
             mode: .customWeights,
@@ -48,7 +92,7 @@ final class AllocationEngineTests: XCTestCase {
     }
 }
 
-final class ReportCalculatorTests: XCTestCase {
+final class ReportCalculatorTests: AppTimerModelTests {
     private let calendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -59,46 +103,38 @@ final class ReportCalculatorTests: XCTestCase {
         calendar.date(from: DateComponents(year: 2026, month: 1, day: day, hour: hour, minute: minute))!
     }
 
-    private func session(start: Date, end: Date?) -> WorkSession {
-        let session = WorkSession(startedAt: start, allocationMode: .equal)
-        session.endedAt = end
-        return session
-    }
-
     func testSessionInsideIntervalKeepsFullDuration() {
-        let work = session(start: date(4, 10), end: date(4, 11))
+        let work = makeSession(start: date(4, 10), end: date(4, 11))
         let interval = DateInterval(start: date(4, 0), end: date(5, 0))
 
         XCTAssertEqual(ReportCalculator.actualDuration(of: work, clippedTo: interval), 3_600)
     }
 
     func testSessionCrossingMidnightIsClippedToDay() {
-        let work = session(start: date(4, 23), end: date(5, 1))
+        let work = makeSession(start: date(4, 23), end: date(5, 1))
         let interval = DateInterval(start: date(5, 0), end: date(6, 0))
 
         XCTAssertEqual(ReportCalculator.actualDuration(of: work, clippedTo: interval), 3_600)
     }
 
     func testOpenSessionUsesProvidedNow() {
-        let work = session(start: date(4, 10), end: nil)
+        let work = makeSession(start: date(4, 10), end: nil)
         let now = date(4, 12, 30)
 
         XCTAssertEqual(ReportCalculator.actualDuration(of: work, now: now), 9_000)
     }
 
     func testNonOverlappingSessionIsExcluded() {
-        let work = session(start: date(1, 10), end: date(1, 11))
+        let work = makeSession(start: date(1, 10), end: date(1, 11))
         let interval = DateInterval(start: date(4, 0), end: date(5, 0))
 
         XCTAssertTrue(ReportCalculator.sessions(in: interval, from: [work]).isEmpty)
     }
 
     func testApplicationDurationsExcludeConfiguredBundleIdentifier() {
-        let work = session(start: date(4, 10), end: date(4, 11))
-        let included = AppSegment(bundleIdentifier: "com.example.work", appName: "Work", session: work, startedAt: date(4, 10))
-        included.endedAt = date(4, 10, 30)
-        let excluded = AppSegment(bundleIdentifier: "com.example.chat", appName: "Chat", session: work, startedAt: date(4, 10, 30))
-        excluded.endedAt = date(4, 11)
+        let work = makeSession(start: date(4, 10), end: date(4, 11))
+        let included = makeSegment(bundleIdentifier: "com.example.work", appName: "Work", session: work, startedAt: date(4, 10), endedAt: date(4, 10, 30))
+        let excluded = makeSegment(bundleIdentifier: "com.example.chat", appName: "Chat", session: work, startedAt: date(4, 10, 30), endedAt: date(4, 11))
         work.appSegments = [included, excluded]
         let interval = DateInterval(start: date(4, 0), end: date(5, 0))
 
@@ -114,13 +150,10 @@ final class ReportCalculatorTests: XCTestCase {
     }
 
     func testFocusDurationsSeparateWorkDistractionAndNeutralContext() {
-        let work = session(start: date(4, 10), end: date(4, 11))
-        let editor = AppSegment(bundleIdentifier: "com.example.editor", appName: "Editor", session: work, startedAt: date(4, 10))
-        editor.endedAt = date(4, 10, 20)
-        let chat = AppSegment(bundleIdentifier: "com.example.chat", appName: "Chat", session: work, startedAt: date(4, 10, 20))
-        chat.endedAt = date(4, 10, 45)
-        let finder = AppSegment(bundleIdentifier: "com.apple.finder", appName: "Finder", session: work, startedAt: date(4, 10, 45))
-        finder.endedAt = date(4, 11)
+        let work = makeSession(start: date(4, 10), end: date(4, 11))
+        let editor = makeSegment(bundleIdentifier: "com.example.editor", appName: "Editor", session: work, startedAt: date(4, 10), endedAt: date(4, 10, 20))
+        let chat = makeSegment(bundleIdentifier: "com.example.chat", appName: "Chat", session: work, startedAt: date(4, 10, 20), endedAt: date(4, 10, 45))
+        let finder = makeSegment(bundleIdentifier: "com.apple.finder", appName: "Finder", session: work, startedAt: date(4, 10, 45), endedAt: date(4, 11))
         work.appSegments = [editor, chat, finder]
         let interval = DateInterval(start: date(4, 0), end: date(5, 0))
 
