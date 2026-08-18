@@ -2,6 +2,24 @@
 
 All notable changes to AppTimer are documented here. The project follows semantic versioning: patch releases protect correctness, minor releases add compatible capabilities, and major releases may alter data or workflow concepts.
 
+## 2.0.0 — Private Timeline and retro annotations
+
+### Added
+
+- Added `ContextSegment` through SwiftData schema V3 with a lightweight V2 → V3 migration stage; historic V1/V2 models remain unchanged.
+- Added an opt-in, local-only passive application-context recorder. It stores only app display name, bundle identifier, and start/end timestamps, with a 30-day default retention period, 7/30/90-day or indefinite options, heartbeat recovery, and full-history deletion.
+- Added a Dashboard Timeline with a daily app-context lane, separate manual project lane, day navigation, and a detailed segment list.
+- Added retro session creation from a selected Timeline range. Projects must be selected explicitly; intersecting manual sessions require an explicit **Trim** or **Replace** policy.
+
+### Changed
+
+- Report calculations now intersect manual sessions with passive context where available and retain historical `AppSegment` data as a fallback.
+- Added a dedicated [Privacy and Timeline Boundary](Docs/Privacy.md) document and updated both README languages with the opt-in collection boundary.
+
+### Verified
+
+- Expanded XCTest for ContextSegment recording, retention, manual/context intersection clipping, historical report fallback, and trim/replace overlap handling.
+
 ## 1.7.0 — Core architecture and migration safety
 
 ### Changed

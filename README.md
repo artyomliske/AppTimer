@@ -69,14 +69,15 @@ The previews below illustrate the three primary AppTimer contexts with synthetic
 | Project allocation | Equal, full-to-each, and normalized custom-weight modes. |
 | Focus Companion | Local work / neutral / distracting application roles with configurable reminder and cooldown thresholds. |
 | Calm Focus | Focus Pulse, 25/50/90-minute blocks, a focus-context ring, and a seven-day heatmap. |
+| Timeline | An opt-in local app-context timeline, with separate manual project annotations and explicit retro-session conflict handling. |
 | Reports | Project and application summaries, editable completed sessions, client details, rates, and CSV export. |
 | Local reliability | Idle pause, sleep handling, normal-exit closure, heartbeat-based crash recovery, and reviewable recovery notices. |
 
 ## Privacy
 
-AppTimer stores only local project and session data plus the display name and bundle identifier of active applications used as report context. It does not use accounts, cloud storage, telemetry, network requests, website URLs, window contents, keystrokes, clipboard contents, or screen recording.
+AppTimer stores project and manual-session data locally. Its passive app-context Timeline is **off by default** and begins only after explicit opt-in in Settings. When enabled, it stores only an active app’s display name, bundle identifier, and local start/end timestamps. It does not use accounts, cloud storage, telemetry, network requests, website URLs, window contents, keystrokes, clipboard contents, or screen recording.
 
-Passive context collection outside a manually running session is not implemented. The project will only add data collection through a clear opt-in setting and documented privacy boundary.
+The user selects a 7/30/90-day or indefinite local retention period and can delete all passive history without removing projects or manual sessions. Read the complete [Privacy and Timeline Boundary](Docs/Privacy.md).
 
 ## Language
 
@@ -100,7 +101,9 @@ The shared XCTest target contains 41 fast, in-memory scenarios covering allocati
 | `AppTimer/Models.swift` | SwiftData entities and shared domain values. |
 | `AppTimer/AllocationEngine.swift` | Allocation rules for multi-project sessions. |
 | `AppTimer/ReportCalculator.swift` | Time clipping and report aggregation. |
-| `AppTimer/AppTimerStore.swift` | Session lifecycle, local persistence, focus state, and recovery coordination. |
+| `AppTimer/ContextRecorder.swift` | Opt-in local app-context recording, heartbeat recovery, and retention cleanup. |
+| `AppTimer/TimelineView.swift` | Read-only daily Timeline with manual annotation controls. |
+| `AppTimer/AppTimerStore.swift` | Session lifecycle, local persistence, focus state, context and recovery coordination. |
 | `AppTimerTests/` | Fast XCTest coverage for pure allocation and reporting logic. |
 | `Docs/` | Architecture, privacy, focus, Calm Focus, and data-integrity notes. |
 
