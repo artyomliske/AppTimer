@@ -315,6 +315,33 @@ final class ReportCalculatorTests: AppTimerModelTests {
         XCTAssertEqual(ReportCalculator.applicationDurations(for: [work], interval: interval, now: date(4, 10, 45)).first?.duration, 2_700)
     }
 
+    func testPassiveContextIsClippedToManualSessionAndReportInterval() {
+        let work = makeSession(start: date(4, 10), end: date(4, 11))
+        let first = ContextSegment(bundleIdentifier: "com.example.editor", appName: "Editor", startedAt: date(4, 9, 30))
+        first.endedAt = date(4, 10, 30)
+        let second = ContextSegment(bundleIdentifier: "com.example.editor", appName: "Editor", startedAt: date(4, 10, 30))
+        second.endedAt = date(4, 11, 30)
+        let interval = DateInterval(start: date(4, 0), end: date(5, 0))
+
+        let durations = ReportCalculator.applicationDurations(for: [work], contextSegments: [first, second], interval: interval)
+        XCTAssertEqual(durations.count, 1)
+        XCTAssertEqual(durations.first?.id, "com.example.editor")
+        XCTAssertEqual(durations.first?.duration, 3_600)
+    }
+
+    func testContextReportFallsBackToHistoricAppSegmentsWhenNoPassiveContextIntersects() {
+        let work = makeSession(start: date(4, 10), end: date(4, 11))
+        let historic = makeSegment(bundleIdentifier: "com.example.legacy", appName: "Legacy", session: work, startedAt: date(4, 10), endedAt: date(4, 11))
+        work.appSegments = [historic]
+        let unrelated = ContextSegment(bundleIdentifier: "com.example.other", appName: "Other", startedAt: date(4, 8))
+        unrelated.endedAt = date(4, 9)
+        let interval = DateInterval(start: date(4, 0), end: date(5, 0))
+
+        let durations = ReportCalculator.applicationDurations(for: [work], contextSegments: [unrelated], interval: interval)
+        XCTAssertEqual(durations.first?.id, "com.example.legacy")
+        XCTAssertEqual(durations.first?.duration, 3_600)
+    }
+
     func testFocusDurationsSeparateWorkDistractionAndNeutralContext() {
         let work = makeSession(start: date(4, 10), end: date(4, 11))
         let editor = makeSegment(bundleIdentifier: "com.example.editor", appName: "Editor", session: work, startedAt: date(4, 10), endedAt: date(4, 10, 20))
@@ -598,6 +625,51 @@ final class SessionServiceTests: AppTimerModelTests {
         XCTAssertEqual(notices.map(\.sessionID), [oldSession.id])
         XCTAssertNotNil(oldSession.endedAt)
         XCTAssertNil(currentSession.endedAt)
+    }
+
+    func testRetroSessionTrimSplitsExistingSessionWithoutOverlap() throws {
+        let project = makeProject(named: "Project")
+        let original = makeSession(start: Date(timeIntervalSince1970: 1_000), end: Date(timeIntervalSince1970: 1_720))
+        makeAllocation(project: project, session: original, weight: 1)
+        let service = SessionService()
+
+        let retro = service.createRetroSession(
+            start: Date(timeIntervalSince1970: 1_180),
+            end: Date(timeIntervalSince1970: 1_540),
+            projects: [project],
+            allocationMode: .equal,
+            customWeights: [:],
+            existingSessions: [original],
+            resolution: .trimExisting,
+            in: modelContext
+        )
+
+        XCTAssertNotNil(retro)
+        let sessions = try modelContext.fetch(FetchDescriptor<WorkSession>(sortBy: [SortDescriptor(\WorkSession.startedAt)]))
+        XCTAssertEqual(sessions.count, 3)
+        XCTAssertFalse(sessions.contains { $0.id != retro?.id && ($0.endedAt ?? .distantFuture) > retro!.startedAt && $0.startedAt < retro!.endedAt! })
+    }
+
+    func testRetroSessionReplaceDeletesConflictingSession() throws {
+        let project = makeProject(named: "Project")
+        let original = makeSession(start: Date(timeIntervalSince1970: 1_000), end: Date(timeIntervalSince1970: 1_720))
+        let service = SessionService()
+
+        let retro = service.createRetroSession(
+            start: Date(timeIntervalSince1970: 1_180),
+            end: Date(timeIntervalSince1970: 1_540),
+            projects: [project],
+            allocationMode: .equal,
+            customWeights: [:],
+            existingSessions: [original],
+            resolution: .replaceExisting,
+            in: modelContext
+        )
+
+        XCTAssertNotNil(retro)
+        let sessions = try modelContext.fetch(FetchDescriptor<WorkSession>())
+        XCTAssertEqual(sessions.count, 1)
+        XCTAssertEqual(sessions.first?.id, retro?.id)
     }
 }
 

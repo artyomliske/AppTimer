@@ -60,6 +60,39 @@ enum ReportCalculator {
         }.sorted { $0.duration > $1.duration }
     }
 
+    static func contextSegments(in interval: DateInterval, from segments: [ContextSegment], now: Date = .now) -> [ContextSegment] {
+        segments.filter { segment in
+            let end = segment.endedAt ?? now
+            return end > interval.start && segment.startedAt < interval.end
+        }
+    }
+
+    // Uses independent passive context whenever it intersects a manual session; falls back to AppSegment
+    // for sessions created before passive recording was enabled.
+    static func applicationDurations(
+        for sessions: [WorkSession],
+        contextSegments: [ContextSegment],
+        interval: DateInterval,
+        excludedBundleIdentifiers: Set<String> = [],
+        now: Date = .now
+    ) -> [ApplicationDuration] {
+        var summary: [String: (String, TimeInterval)] = [:]
+        for session in Self.sessions(in: interval, from: sessions, now: now) {
+            let sessionInterval = DateInterval(start: session.startedAt, end: session.endedAt ?? now)
+            let matchingContext = contextSegments.filter {
+                ($0.endedAt ?? now) > sessionInterval.start && $0.startedAt < sessionInterval.end
+            }
+            if matchingContext.isEmpty {
+                addApplicationSegments(session.appSegments, to: &summary, clippedTo: interval, sessionInterval: sessionInterval, excludedBundleIdentifiers: excludedBundleIdentifiers, now: now)
+            } else {
+                addContextSegments(matchingContext, to: &summary, clippedTo: interval, sessionInterval: sessionInterval, excludedBundleIdentifiers: excludedBundleIdentifiers, now: now)
+            }
+        }
+        return summary.map { identifier, value in
+            ApplicationDuration(id: identifier, name: value.0, duration: value.1)
+        }.sorted { $0.duration > $1.duration }
+    }
+
     static func focusDurations(
         for sessions: [WorkSession],
         interval: DateInterval,
@@ -87,5 +120,81 @@ enum ReportCalculator {
         }
 
         return FocusDurationSummary(work: work, distracting: distracting, neutral: neutral)
+    }
+
+    static func focusDurations(
+        for sessions: [WorkSession],
+        contextSegments: [ContextSegment],
+        interval: DateInterval,
+        workBundleIdentifiers: Set<String>,
+        distractingBundleIdentifiers: Set<String>,
+        now: Date = .now
+    ) -> FocusDurationSummary {
+        var work: TimeInterval = 0
+        var distracting: TimeInterval = 0
+        var neutral: TimeInterval = 0
+        let applicationDurations = applicationDurations(
+            for: sessions,
+            contextSegments: contextSegments,
+            interval: interval,
+            excludedBundleIdentifiers: [],
+            now: now
+        )
+        for application in applicationDurations {
+            if distractingBundleIdentifiers.contains(application.id) {
+                distracting += application.duration
+            } else if workBundleIdentifiers.contains(application.id) {
+                work += application.duration
+            } else {
+                neutral += application.duration
+            }
+        }
+        return FocusDurationSummary(work: work, distracting: distracting, neutral: neutral)
+    }
+
+    private static func addApplicationSegments(
+        _ segments: [AppSegment],
+        to summary: inout [String: (String, TimeInterval)],
+        clippedTo interval: DateInterval,
+        sessionInterval: DateInterval,
+        excludedBundleIdentifiers: Set<String>,
+        now: Date
+    ) {
+        for segment in segments {
+            guard !excludedBundleIdentifiers.contains(segment.bundleIdentifier) else { continue }
+            let duration = overlappingDuration(
+                start: segment.startedAt,
+                end: segment.endedAt ?? now,
+                interval: interval,
+                sessionInterval: sessionInterval
+            )
+            summary[segment.bundleIdentifier, default: (segment.appName, 0)].1 += duration
+        }
+    }
+
+    private static func addContextSegments(
+        _ segments: [ContextSegment],
+        to summary: inout [String: (String, TimeInterval)],
+        clippedTo interval: DateInterval,
+        sessionInterval: DateInterval,
+        excludedBundleIdentifiers: Set<String>,
+        now: Date
+    ) {
+        for segment in segments {
+            guard !excludedBundleIdentifiers.contains(segment.bundleIdentifier) else { continue }
+            let duration = overlappingDuration(
+                start: segment.startedAt,
+                end: segment.endedAt ?? now,
+                interval: interval,
+                sessionInterval: sessionInterval
+            )
+            summary[segment.bundleIdentifier, default: (segment.appName, 0)].1 += duration
+        }
+    }
+
+    private static func overlappingDuration(start: Date, end: Date, interval: DateInterval, sessionInterval: DateInterval) -> TimeInterval {
+        let lower = max(max(start, interval.start), sessionInterval.start)
+        let upper = min(min(end, interval.end), sessionInterval.end)
+        return max(0, upper.timeIntervalSince(lower))
     }
 }

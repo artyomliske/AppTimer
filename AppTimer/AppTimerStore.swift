@@ -144,12 +144,19 @@ final class AppTimerStore {
     }
 
     var todayApplicationDurations: [ApplicationDuration] {
-        ReportCalculator.applicationDurations(for: sessions, interval: todayInterval, excludedBundleIdentifiers: excludedBundleIdentifiers, now: now)
+        ReportCalculator.applicationDurations(
+            for: sessions,
+            contextSegments: contextSegments,
+            interval: todayInterval,
+            excludedBundleIdentifiers: excludedBundleIdentifiers,
+            now: now
+        )
     }
 
     var todayFocusDurations: FocusDurationSummary {
         ReportCalculator.focusDurations(
             for: sessions,
+            contextSegments: contextSegments,
             interval: todayInterval,
             workBundleIdentifiers: workBundleIdentifiers,
             distractingBundleIdentifiers: distractingBundleIdentifiers,
@@ -164,6 +171,7 @@ final class AppTimerStore {
                   let interval = calendar.dateInterval(of: .day, for: date) else { return nil }
             let durations = ReportCalculator.focusDurations(
                 for: sessions,
+                contextSegments: contextSegments,
                 interval: interval,
                 workBundleIdentifiers: workBundleIdentifiers,
                 distractingBundleIdentifiers: distractingBundleIdentifiers,
