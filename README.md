@@ -49,17 +49,11 @@ make install
 
 Release DMGs are ad-hoc signed but are not Apple-notarized because the project does not currently use a paid Apple Developer account. For a downloaded release, use Finder’s **Control-click → Open → Open** once. If you prefer not to bypass Gatekeeper, build locally with `make install` and inspect the public source code and CI workflow first.
 
-## Visual tour
+## Interface
 
-The previews below illustrate the three primary AppTimer contexts with synthetic local project data only: a compact Menu Bar workflow, the Today focus view, and weekly reports. They do not depict or transmit personal activity data.
+AppTimer 2.1 uses one native macOS visual system across its Menu Bar and Dashboard. The Menu Bar starts with a Focus Pulse and live duration, groups local projects in a compact surface, and exposes the primary tracking action directly. The Dashboard starts with a large focus ring, daily summary, project cards, local app context, and the seven-day rhythm; Timeline, Projects, Reports, and Settings use the same light surfaces and blue focus accent.
 
-![AppTimer visual tour](Docs/media/apptimer-overview.gif)
-
-![AppTimer Menu Bar workflow](Docs/media/menu-bar-preview.png)
-
-![AppTimer Today focus view](Docs/media/today-focus-preview.png)
-
-![AppTimer weekly focus report](Docs/media/weekly-focus-preview.png)
+> The repository intentionally does not use static concept art as product screenshots. The released application is the source of truth for the current interface, and all displayed metrics are derived from the user’s local data only.
 
 ## Features
 
