@@ -23,6 +23,12 @@
 			B10000000000000000000014 /* SessionEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000017 /* SessionEditorSheet.swift */; };
 			B10000000000000000000015 /* IdleMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000018 /* IdleMonitor.swift */; };
 			B10000000000000000000016 /* LocalNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000019 /* LocalNotificationManager.swift */; };
+			B20000000000000000000001 /* AppTimerCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000001 /* AppTimerCoreTests.swift */; };
+			B20000000000000000000002 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000002 /* Models.swift */; };
+			B20000000000000000000003 /* AllocationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000003 /* AllocationEngine.swift */; };
+			B20000000000000000000004 /* ReportCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000005 /* ReportCalculator.swift */; };
+			B20000000000000000000005 /* SwiftData.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F10000000000000000000012 /* SwiftData.framework */; };
+			B20000000000000000000006 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F20000000000000000000003 /* XCTest.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -45,6 +51,9 @@
 			F10000000000000000000017 /* SessionEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionEditorSheet.swift; sourceTree = "<group>"; };
 			F10000000000000000000018 /* IdleMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdleMonitor.swift; sourceTree = "<group>"; };
 			F10000000000000000000019 /* LocalNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalNotificationManager.swift; sourceTree = "<group>"; };
+			F20000000000000000000001 /* AppTimerCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTimerCoreTests.swift; sourceTree = "<group>"; };
+			F20000000000000000000002 /* AppTimerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppTimerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+			F20000000000000000000003 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -56,14 +65,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+			A20000000000000000000001 /* Frameworks */ = {
+				isa = PBXFrameworksBuildPhase;
+				buildActionMask = 2147483647;
+				files = (
+					B20000000000000000000005 /* SwiftData.framework in Frameworks */,
+					B20000000000000000000006 /* XCTest.framework in Frameworks */,
+				);
+				runOnlyForDeploymentPostprocessing = 0;
+			};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		A10000000000000000000001 = {
-			isa = PBXGroup;
-			children = (
-				A10000000000000000000002 /* AppTimer */,
-				A10000000000000000000003 /* Frameworks */,
+			A10000000000000000000001 = {
+				isa = PBXGroup;
+				children = (
+					A10000000000000000000002 /* AppTimer */,
+					A20000000000000000000002 /* AppTimerTests */,
+					A10000000000000000000003 /* Frameworks */,
 				A10000000000000000000005 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -100,14 +119,23 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		A10000000000000000000005 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				F10000000000000000000011 /* AppTimer.app */,
+			A10000000000000000000005 /* Products */ = {
+				isa = PBXGroup;
+				children = (
+					F10000000000000000000011 /* AppTimer.app */,
+					F20000000000000000000002 /* AppTimerTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
+			A20000000000000000000002 /* AppTimerTests */ = {
+				isa = PBXGroup;
+				children = (
+					F20000000000000000000001 /* AppTimerCoreTests.swift */,
+				);
+				path = AppTimerTests;
+				sourceTree = "<group>";
+			};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -128,6 +156,22 @@
 			productReference = F10000000000000000000011 /* AppTimer.app */;
 			productType = "com.apple.product-type.application";
 		};
+			A20000000000000000000004 /* AppTimerTests */ = {
+				isa = PBXNativeTarget;
+				buildConfigurationList = A20000000000000000000005 /* Build configuration list for PBXNativeTarget "AppTimerTests" */;
+				buildPhases = (
+					A20000000000000000000003 /* Sources */,
+					A20000000000000000000001 /* Frameworks */,
+				);
+				buildRules = (
+				);
+				dependencies = (
+				);
+				name = AppTimerTests;
+				productName = AppTimerTests;
+				productReference = F20000000000000000000002 /* AppTimerTests.xctest */;
+				productType = "com.apple.product-type.bundle.unit-test";
+			};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -138,9 +182,12 @@
 				LastSwiftUpdateCheck = 2600;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
-					A10000000000000000000006 = {
-						CreatedOnToolsVersion = 26.0;
-					};
+						A10000000000000000000006 = {
+							CreatedOnToolsVersion = 26.0;
+						};
+						A20000000000000000000004 = {
+							CreatedOnToolsVersion = 26.0;
+						};
 				};
 			};
 			buildConfigurationList = A10000000000000000000011 /* Build configuration list for PBXProject "AppTimer" */;
@@ -157,7 +204,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A10000000000000000000006 /* AppTimer */,
+					A10000000000000000000006 /* AppTimer */,
+					A20000000000000000000004 /* AppTimerTests */,
 			);
 		};
 /* End PBXProject section */
@@ -195,6 +243,17 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+			A20000000000000000000003 /* Sources */ = {
+				isa = PBXSourcesBuildPhase;
+				buildActionMask = 2147483647;
+				files = (
+					B20000000000000000000001 /* AppTimerCoreTests.swift in Sources */,
+					B20000000000000000000002 /* Models.swift in Sources */,
+					B20000000000000000000003 /* AllocationEngine.swift in Sources */,
+					B20000000000000000000004 /* ReportCalculator.swift in Sources */,
+				);
+				runOnlyForDeploymentPostprocessing = 0;
+			};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
@@ -274,6 +333,31 @@
 				};
 				name = Release;
 		};
+			C20000000000000000000001 /* Debug */ = {
+				isa = XCBuildConfiguration;
+				buildSettings = {
+					GENERATE_INFOPLIST_FILE = YES;
+					MACOSX_DEPLOYMENT_TARGET = 14.0;
+					PRODUCT_BUNDLE_IDENTIFIER = com.apptimer.tests;
+					PRODUCT_NAME = "$(TARGET_NAME)";
+					SDKROOT = macosx;
+					SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+					SWIFT_VERSION = 5.0;
+				};
+				name = Debug;
+			};
+			C20000000000000000000002 /* Release */ = {
+				isa = XCBuildConfiguration;
+				buildSettings = {
+					GENERATE_INFOPLIST_FILE = YES;
+					MACOSX_DEPLOYMENT_TARGET = 14.0;
+					PRODUCT_BUNDLE_IDENTIFIER = com.apptimer.tests;
+					PRODUCT_NAME = "$(TARGET_NAME)";
+					SDKROOT = macosx;
+					SWIFT_VERSION = 5.0;
+				};
+				name = Release;
+			};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -295,6 +379,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+			A20000000000000000000005 /* Build configuration list for PBXNativeTarget "AppTimerTests" */ = {
+				isa = XCConfigurationList;
+				buildConfigurations = (
+					C20000000000000000000001 /* Debug */,
+					C20000000000000000000002 /* Release */,
+				);
+				defaultConfigurationIsVisible = 0;
+				defaultConfigurationName = Debug;
+			};
 /* End XCConfigurationList section */
 	};
 	rootObject = A10000000000000000000010 /* Project object */;

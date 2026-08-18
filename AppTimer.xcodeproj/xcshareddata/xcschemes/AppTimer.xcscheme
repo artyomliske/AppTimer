@@ -23,13 +23,23 @@
          </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
-   <TestAction
+	   <TestAction
       buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-      shouldUseLaunchSchemeArgsEnv = "YES">
-      <Testables>
-      </Testables>
+	      shouldUseLaunchSchemeArgsEnv = "YES">
+	      <Testables>
+	         <TestableReference
+	            skipped = "NO">
+	            <BuildableReference
+	               BuildableIdentifier = "primary"
+	               BlueprintIdentifier = "A20000000000000000000004"
+	               BuildableName = "AppTimerTests.xctest"
+	               BlueprintName = "AppTimerTests"
+	               ReferencedContainer = "container:AppTimer.xcodeproj">
+	            </BuildableReference>
+	         </TestableReference>
+	      </Testables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
