@@ -2,6 +2,17 @@
 
 All notable changes to AppTimer are documented here. The project follows semantic versioning: patch releases protect correctness, minor releases add compatible capabilities, and major releases may alter data or workflow concepts.
 
+## 1.5.1 — Verified release pipeline
+
+### Fixed
+
+- Isolated SwiftUI presentation types on the main actor so the project compiles under the strict concurrency checks of the GitHub macOS runner.
+- Created every SwiftData model used by XCTest within an isolated in-memory `ModelContainer`, removing test dependence on an app-level active container.
+
+### Release
+
+- Ships from a clean, green tag-driven workflow that builds the DMG, publishes its SHA-256 file, and records a GitHub build provenance attestation.
+
 ## 1.5.0 — Project quality foundation
 
 ### Added

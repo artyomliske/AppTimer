@@ -13,5 +13,5 @@ xcuserdata/
 # Local release artifacts — release files are attached to GitHub Releases.
 .build/
 dist/
-releases/*.dmg
-releases/*.sha256
+*.dmg
+*.sha256
