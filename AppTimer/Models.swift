@@ -11,17 +11,17 @@ enum AllocationMode: String, CaseIterable, Codable, Identifiable {
 
     var title: String {
         switch self {
-        case .equal: "Поровну"
-        case .fullToEach: "Полностью каждому"
-        case .customWeights: "Ручные доли"
+        case .equal: L10n.text("allocation.equal")
+        case .fullToEach: L10n.text("allocation.full")
+        case .customWeights: L10n.text("allocation.custom")
         }
     }
 
     var detail: String {
         switch self {
-        case .equal: "Время делится между выбранными проектами."
-        case .fullToEach: "Каждый проект получает полную длительность интервала."
-        case .customWeights: "Распределите время вручную в процентах."
+        case .equal: L10n.text("allocation.equal.detail")
+        case .fullToEach: L10n.text("allocation.full.detail")
+        case .customWeights: L10n.text("allocation.custom.detail")
         }
     }
 }
@@ -35,17 +35,17 @@ enum FocusApplicationRole: String, CaseIterable, Codable, Identifiable {
 
     var title: String {
         switch self {
-        case .work: "Рабочее"
-        case .neutral: "Нейтральное"
-        case .distracting: "Отвлекающее"
+        case .work: L10n.text("role.work")
+        case .neutral: L10n.text("role.neutral")
+        case .distracting: L10n.text("role.distracting")
         }
     }
 
     var detail: String {
         switch self {
-        case .work: "Учитывается как контекст концентрации."
-        case .neutral: "Сохраняется в отчёте, но не вызывает напоминаний."
-        case .distracting: "Может вызвать напоминание во время активного учёта."
+        case .work: L10n.text("role.work.detail")
+        case .neutral: L10n.text("role.neutral.detail")
+        case .distracting: L10n.text("role.distracting.detail")
         }
     }
 }
@@ -57,13 +57,13 @@ enum FocusSessionPreset: Int, CaseIterable, Identifiable {
 
     var id: Int { rawValue }
     var minutes: Int { rawValue }
-    var title: String { "\(rawValue) мин" }
+    var title: String { L10n.format("duration.minutes.format", rawValue) }
 
     var detail: String {
         switch self {
-        case .short: "Короткий разгон для одной задачи."
-        case .standard: "Обычный блок глубокой работы."
-        case .deep: "Длинный блок без переключений."
+        case .short: L10n.text("focus.short.detail")
+        case .standard: L10n.text("focus.standard.detail")
+        case .deep: L10n.text("focus.deep.detail")
         }
     }
 }
@@ -77,11 +77,11 @@ enum FocusPulseState: String {
 
     var title: String {
         switch self {
-        case .resting: "Покой"
-        case .tracking: "Учёт идёт"
-        case .focused: "Фокус"
-        case .distracted: "Отвлечение"
-        case .completed: "Блок завершён"
+        case .resting: L10n.text("pulse.resting")
+        case .tracking: L10n.text("pulse.tracking")
+        case .focused: L10n.text("pulse.focused")
+        case .distracted: L10n.text("pulse.distracted")
+        case .completed: L10n.text("pulse.completed")
         }
     }
 
@@ -237,7 +237,7 @@ extension TimeInterval {
     var appTimerText: String {
         let hours = Int(self) / 3_600
         let minutes = (Int(self) % 3_600) / 60
-        return hours > 0 ? String(format: "%d ч %02d мин", hours, minutes) : String(format: "%d мин", minutes)
+        return hours > 0 ? L10n.format("duration.hours_minutes.format", hours, minutes) : L10n.format("duration.minutes.format", minutes)
     }
 
     var appTimerCompactText: String {

@@ -369,7 +369,7 @@ final class AppTimerStoreTests: AppTimerModelTests {
         store.startTracking()
 
         XCTAssertFalse(store.isTracking)
-        XCTAssertEqual(store.statusMessage, "Выберите хотя бы один проект")
+        XCTAssertEqual(store.statusMessage, L10n.text("status.choose_at_least_one"))
     }
 
     func testStartAndStopTrackingCreateAndCloseSession() {
@@ -455,7 +455,7 @@ final class AppTimerStoreTests: AppTimerModelTests {
         store.startFocusSession(FocusSessionPreset.short)
 
         XCTAssertFalse(store.hasActiveFocusSession)
-        XCTAssertEqual(store.statusMessage, "Выберите проект для фокус-сессии")
+        XCTAssertEqual(store.statusMessage, L10n.text("status.choose_focus_project"))
     }
 
     func testArchivingAProjectClearsItsSelection() {
@@ -503,7 +503,15 @@ final class ModelUtilityTests: AppTimerModelTests {
         XCTAssertEqual(TimeInterval(5_400).appTimerCompactText, "01:30")
     }
 
-    func testLongTimeIntervalFormattingUsesRussianUnits() {
-        XCTAssertEqual(TimeInterval(5_400).appTimerText, "1 ч 30 мин")
+    func testLongTimeIntervalFormattingUsesCurrentLocalizedTemplate() {
+        XCTAssertEqual(TimeInterval(5_400).appTimerText, L10n.format("duration.hours_minutes.format", 1, 30))
+    }
+
+    func testRussianLocalizationHasTrackingStatus() {
+        XCTAssertEqual(L10n.text("status.choose_project", languageCode: "ru"), "Выберите проект, чтобы начать учёт")
+    }
+
+    func testEnglishLocalizationHasTrackingStatus() {
+        XCTAssertEqual(L10n.text("status.choose_project", languageCode: "en"), "Choose a project to start tracking")
     }
 }

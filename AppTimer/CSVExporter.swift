@@ -5,7 +5,7 @@ import Foundation
 @MainActor
 enum CSVExporter {
     static func export(projects: [ProjectDuration], catalog: [UUID: Project], period: String) {
-        let header = "Период,Проект,Клиент,Ставка в час,Фактическое время (сек),Распределённое время (сек),Сумма"
+        let header = L10n.text("csv.header")
         let rows = projects.map { row in
             let project = catalog[row.id]
             let rate = project?.hourlyRate ?? 0

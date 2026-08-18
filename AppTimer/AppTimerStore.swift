@@ -15,7 +15,7 @@ final class AppTimerStore {
     var customWeights: [UUID: Double] = [:]
     var activeSession: WorkSession?
     var now = Date()
-    var statusMessage = "Выберите проект, чтобы начать учёт"
+    var statusMessage = L10n.text("status.choose_project")
     private(set) var focusSettingsRevision = 0
     var activeFocusPreset: FocusSessionPreset?
     var focusSessionStartedAt: Date?
@@ -219,7 +219,7 @@ final class AppTimerStore {
             self?.transition(to: application)
         }
         workspaceMonitor.onSystemPause = { [weak self] in
-            self?.stopTracking(reason: "Учёт остановлен во время сна Mac")
+            self?.stopTracking(reason: L10n.text("status.sleep_stopped"))
         }
         idleMonitor.onIdleThresholdReached = { [weak self] in
             self?.pauseForInactivity()
@@ -261,8 +261,8 @@ final class AppTimerStore {
             storageErrorMessage = nil
         } catch {
             logger.error("Не удалось загрузить локальные данные: \(error.localizedDescription, privacy: .public)")
-            storageErrorMessage = "Не удалось загрузить локальные данные. Перезапустите AppTimer; исходные файлы хранилища не изменены."
-            statusMessage = "Ошибка загрузки локальных данных"
+            storageErrorMessage = L10n.text("status.storage_load_failed")
+            statusMessage = L10n.text("status.storage_load_error")
             return
         }
         activeSession = sessions.first(where: { $0.endedAt == nil })
@@ -274,7 +274,7 @@ final class AppTimerStore {
             customWeights = Dictionary(uniqueKeysWithValues: activeSession.allocations.compactMap { allocation in
                 allocation.project.map { ($0.id, allocation.weight) }
             })
-            statusMessage = "Идёт учёт: \(elapsedText)"
+            statusMessage = L10n.format("status.tracking", elapsedText)
         }
     }
 
@@ -323,12 +323,12 @@ final class AppTimerStore {
     }
 
     func startOrStopTracking() {
-        isTracking ? stopTracking(reason: "Учёт остановлен") : startTracking()
+        isTracking ? stopTracking(reason: L10n.text("status.tracking_stopped")) : startTracking()
     }
 
     func startFocusSession(_ preset: FocusSessionPreset) {
         guard !selectedProjectIDs.isEmpty else {
-            statusMessage = "Выберите проект для фокус-сессии"
+            statusMessage = L10n.text("status.choose_focus_project")
             return
         }
         if !isTracking { startTracking() }
@@ -339,7 +339,7 @@ final class AppTimerStore {
         focusSessionEndsAt = now.addingTimeInterval(TimeInterval(preset.minutes * 60))
         lastFocusSessionCompletedAt = nil
         notificationManager.requestAuthorizationIfNeeded()
-        statusMessage = "Фокус: \(preset.title)"
+        statusMessage = L10n.format("status.focus", preset.title)
     }
 
     func cancelFocusSession() {
@@ -347,14 +347,14 @@ final class AppTimerStore {
         activeFocusPreset = nil
         focusSessionStartedAt = nil
         focusSessionEndsAt = nil
-        statusMessage = isTracking ? "Фокус-сессия отменена, учёт продолжается" : "Фокус-сессия отменена"
+        statusMessage = isTracking ? L10n.text("status.focus_cancelled_tracking") : L10n.text("status.focus_cancelled")
     }
 
     func startTracking() {
         guard let modelContext else { return }
         let currentProjects = selectedProjects
         guard !currentProjects.isEmpty else {
-            statusMessage = "Выберите хотя бы один проект"
+            statusMessage = L10n.text("status.choose_at_least_one")
             return
         }
         rememberRecentProjects(currentProjects)
@@ -371,10 +371,10 @@ final class AppTimerStore {
         transition(to: workspaceMonitor.currentApplication)
         saveAndRefresh()
         writeHeartbeat(at: now)
-        statusMessage = "Идёт учёт: \(elapsedText)"
+        statusMessage = L10n.format("status.tracking", elapsedText)
     }
 
-    func stopTracking(reason: String = "Учёт остановлен") {
+    func stopTracking(reason: String = L10n.text("status.tracking_stopped")) {
         guard activeSession != nil else { return }
         closeActiveSession()
         statusMessage = reason
@@ -562,15 +562,15 @@ final class AppTimerStore {
             return true
         } catch {
             logger.error("Не удалось выполнить \(context, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            storageErrorMessage = "Не удалось сохранить локальные данные. Изменения останутся в памяти до повторной попытки."
-            statusMessage = "Ошибка сохранения локальных данных"
+            storageErrorMessage = L10n.text("status.storage_save_failed")
+            statusMessage = L10n.text("status.storage_save_error")
             return false
         }
     }
 
     private func updateIdleStatus() {
         if !isTracking {
-            statusMessage = selectedProjectIDs.isEmpty ? "Выберите проект, чтобы начать учёт" : "Готово к началу учёта"
+            statusMessage = selectedProjectIDs.isEmpty ? L10n.text("status.choose_project") : L10n.text("status.ready")
         }
     }
 
@@ -637,7 +637,7 @@ final class AppTimerStore {
             recoveredSessionNotice = RecoveredSessionNotice(
                 sessionID: session.id,
                 closedAt: recoveryDate,
-                projectNames: projectNames.isEmpty ? "Без проекта" : projectNames
+                projectNames: projectNames.isEmpty ? L10n.text("status.no_project") : projectNames
             )
         }
 
@@ -658,11 +658,11 @@ final class AppTimerStore {
 
     private func pauseForInactivity() {
         guard idlePauseEnabled, isTracking else { return }
-        stopTracking(reason: "Учёт приостановлен: нет активности \(idlePauseMinutes) мин")
+        stopTracking(reason: L10n.format("status.idle_paused", idlePauseMinutes))
         notificationManager.post(
             identifier: "apptimer.idle-pause",
-            title: "Учёт приостановлен",
-            body: "AppTimer остановил учёт после \(idlePauseMinutes) мин бездействия."
+            title: L10n.text("notification.idle.title"),
+            body: L10n.format("notification.idle.body", idlePauseMinutes)
         )
     }
 
@@ -702,8 +702,8 @@ final class AppTimerStore {
         let projectNames = selectedProjects.map(\.name).joined(separator: ", ")
         notificationManager.post(
             identifier: "apptimer.distraction-reminder",
-            title: "Пора вернуться к задаче",
-            body: "Вы уже \(distractionAlertMinutes) мин в «\(application.name)». Активный проект: \(projectNames)."
+            title: L10n.text("notification.distraction.title"),
+            body: L10n.format("notification.distraction.body", application.name, distractionAlertMinutes, projectNames)
         )
         lastDistractionReminderAt = currentTime
     }
@@ -717,11 +717,11 @@ final class AppTimerStore {
         focusSessionStartedAt = nil
         focusSessionEndsAt = nil
         lastFocusSessionCompletedAt = now
-        statusMessage = "Фокус-блок \(preset.title) завершён"
+        statusMessage = L10n.format("status.focus_completed", preset.title)
         notificationManager.post(
             identifier: "apptimer.focus-session-complete",
-            title: "Фокус-блок завершён",
-            body: "Вы завершили блок на \(preset.title). Сделайте короткую паузу или продолжите учёт."
+            title: L10n.text("notification.focus.title"),
+            body: L10n.format("notification.focus.body", preset.title)
         )
     }
 
@@ -742,8 +742,8 @@ final class AppTimerStore {
 
         notificationManager.post(
             identifier: "apptimer.project-reminder",
-            title: "Выберите проект",
-            body: "Вы используете Mac, но AppTimer пока не учитывает время."
+            title: L10n.text("notification.project.title"),
+            body: L10n.text("notification.project.body")
         )
         lastUnassignedReminderAt = currentTime
     }
