@@ -496,7 +496,7 @@ private struct ProjectsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Проекты").font(.largeTitle.bold())
+            Text("Проекты").font(.system(size: 34, weight: .bold, design: .rounded))
             HStack {
                 TextField("Название нового проекта", text: $newProjectName)
                     .textFieldStyle(.roundedBorder)
@@ -533,6 +533,7 @@ private struct ProjectsView: View {
             }
         }
         .padding(28)
+        .background(AppTimerVisual.canvas)
         .navigationTitle("Проекты")
         .sheet(item: $editingProject) { ProjectDetailsSheet(project: $0) }
     }
@@ -562,7 +563,7 @@ private struct ReportsView: View {
         VStack(alignment: .leading, spacing: 20) {
             HStack {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Отчёты").font(.largeTitle.bold())
+                    Text("Отчёты").font(.system(size: 34, weight: .bold, design: .rounded))
                     Text("Фактическое время и распределение по проектам.").foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -641,6 +642,7 @@ private struct ReportsView: View {
             Spacer()
         }
         .padding(28)
+        .background(AppTimerVisual.canvas)
         .navigationTitle("Отчёты")
         .sheet(item: $editingSession) { SessionEditorSheet(session: $0) }
     }
@@ -793,6 +795,7 @@ private struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .background(AppTimerVisual.canvas)
         .navigationTitle("Настройки")
         .confirmationDialog(
             "Удалить всю пассивную историю?",
