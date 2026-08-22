@@ -111,3 +111,5 @@ AppTimer has no cloud sync, accounts, telemetry, automatic project classificatio
 Please run `make test` before opening a pull request. For user-visible changes, describe whether the change affects local data, privacy boundaries, or existing reports.
 
 See [CHANGELOG.md](CHANGELOG.md) for release history. AppTimer is available under the [MIT License](LICENSE).
+
+[View the full portfolio case →](https://artyomliske.ru/#case-apptimer)
